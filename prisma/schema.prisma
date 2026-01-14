@@ -1,0 +1,169 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  GUEST
+  ADMIN
+  BRAND_CHEF
+}
+
+enum MixStrength {
+  LIGHT
+  MEDIUM
+  STRONG
+}
+
+enum ActionType {
+  LIKE
+  DISLIKE
+  ORDER
+}
+
+enum FlavorTag {
+  SWEET
+  SOUR
+  FRESH
+  SPICY
+  FRUITY
+  BERRY
+  CITRUS
+  MINT
+  ICE
+  CREAMY
+  NUTTY
+  FLORAL
+  HERBAL
+  EXOTIC
+  DESSERT
+  TOBACCO
+  COFFEE
+  CHOCOLATE
+  VANILLA
+  TROPICAL
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id         BigInt      @id
+  username   String?
+  firstName  String?
+  lastName   String?
+  role       UserRole    @default(GUEST)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  
+  mixes      Mix[]       @relation("MixAuthor")
+  actions    MixAction[]
+  
+  @@map("users")
+}
+
+model Brand {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  logoUrl     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  flavors     Flavor[]
+  
+  @@map("brands")
+}
+
+model Flavor {
+  id                   Int         @id @default(autoincrement())
+  name                 String
+  slug                 String
+  description          String?
+  brandId              Int
+  flavorProfile        FlavorTag[]
+  manufacturerStrength Int         @default(5)
+  imageUrl             String?
+  isDeleted            Boolean     @default(false)
+  isAvailable          Boolean     @default(true)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  
+  brand                Brand       @relation(fields: [brandId], references: [id])
+  mixIngredients       MixIngredient[]
+  
+  @@unique([brandId, slug])
+  @@index([brandId])
+  @@index([isDeleted, isAvailable])
+  @@map("flavors")
+}
+
+model Mix {
+  id            Int           @id @default(autoincrement())
+  name          String
+  slug          String        @unique
+  description   String?
+  authorId      BigInt
+  userStrength  MixStrength   @default(MEDIUM)
+  rating        Float         @default(0)
+  likesCount    Int           @default(0)
+  dislikesCount Int           @default(0)
+  ordersCount   Int           @default(0)
+  isPublished   Boolean       @default(true)
+  isDeleted     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  author        User          @relation("MixAuthor", fields: [authorId], references: [id])
+  ingredients   MixIngredient[]
+  actions       MixAction[]
+  
+  @@index([authorId])
+  @@index([rating])
+  @@index([likesCount])
+  @@index([ordersCount])
+  @@map("mixes")
+}
+
+model MixIngredient {
+  id         Int    @id @default(autoincrement())
+  mixId      Int
+  flavorId   Int
+  percentage Int
+  
+  mix        Mix    @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  flavor     Flavor @relation(fields: [flavorId], references: [id])
+  
+  @@unique([mixId, flavorId])
+  @@index([mixId])
+  @@index([flavorId])
+  @@map("mix_ingredients")
+}
+
+model MixAction {
+  id          Int        @id @default(autoincrement())
+  userId      BigInt
+  mixId       Int
+  type        ActionType
+  tableNumber String?
+  comment     String?
+  createdAt   DateTime   @default(now())
+  
+  user        User       @relation(fields: [userId], references: [id])
+  mix         Mix        @relation(fields: [mixId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, mixId, type])
+  @@index([userId])
+  @@index([mixId])
+  @@index([type])
+  @@map("mix_actions")
+}
