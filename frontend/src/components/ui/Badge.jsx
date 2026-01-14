@@ -1,12 +1,13 @@
 import React from 'react';
 
 const variants = {
-  default: 'bg-surface-elevated text-text-secondary',
-  green: 'bg-accent-green/15 text-accent-green',
-  orange: 'bg-accent-orange/15 text-accent-orange',
-  red: 'bg-accent-red/15 text-accent-red',
-  blue: 'bg-accent-blue/15 text-accent-blue',
-  purple: 'bg-accent-purple/15 text-accent-purple',
+  default: 'bg-zinc-800 text-zinc-400',
+  green: 'bg-emerald-500/20 text-emerald-400',
+  orange: 'bg-amber-500/20 text-amber-400',
+  red: 'bg-red-500/20 text-red-400',
+  blue: 'bg-blue-500/20 text-blue-400',
+  purple: 'bg-purple-500/20 text-purple-400',
+  pink: 'bg-pink-500/20 text-pink-400',
 };
 
 export default function Badge({ 
@@ -20,7 +21,7 @@ export default function Badge({
       className={`
         inline-flex items-center
         px-2.5 py-1
-        text-caption-1 font-medium
+        text-xs font-medium
         rounded-full
         ${variants[variant]}
         ${className}

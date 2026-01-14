@@ -13,13 +13,9 @@ export default function Navbar() {
   const location = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-bottom">
-      {/* Blur background */}
-      <div className="absolute inset-0 glass-solid" />
-      
-      {/* Content */}
-      <div className="relative px-6 pt-2 pb-2">
-        <div className="flex items-center justify-around">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-6 pt-2">
+      <div className="mx-auto max-w-md">
+        <div className="flex items-center justify-around rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-zinc-800 p-2">
           {navItems.map((item) => {
             const isActive = location.pathname === item.to || 
               (item.to !== '/' && location.pathname.startsWith(item.to));
@@ -29,31 +25,17 @@ export default function Navbar() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                className="flex flex-col items-center gap-1 py-2 px-4 press-effect"
-              >
-                <div className={`
-                  p-2 rounded-ios-lg transition-all duration-200
+                className={`
+                  flex flex-col items-center gap-1 px-4 py-2 rounded-xl
+                  transition-all duration-200
                   ${isActive 
-                    ? 'bg-accent-green/20' 
-                    : 'bg-transparent'
+                    ? 'bg-emerald-500/20 text-emerald-400' 
+                    : 'text-zinc-500 hover:text-zinc-300'
                   }
-                `}>
-                  <Icon 
-                    size={22} 
-                    className={`transition-colors duration-200 ${
-                      isActive 
-                        ? 'text-accent-green' 
-                        : 'text-text-tertiary'
-                    }`}
-                    strokeWidth={isActive ? 2.5 : 2}
-                  />
-                </div>
-                <span className={`
-                  text-caption-2 font-medium transition-colors duration-200
-                  ${isActive ? 'text-accent-green' : 'text-text-tertiary'}
-                `}>
-                  {item.label}
-                </span>
+                `}
+              >
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                <span className="text-xs font-medium">{item.label}</span>
               </NavLink>
             );
           })}

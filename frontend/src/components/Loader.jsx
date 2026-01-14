@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 export default function Loader({ size = 'default', className = '' }) {
   const sizes = {
@@ -11,8 +12,8 @@ export default function Loader({ size = 'default', className = '' }) {
     <div className={`flex items-center justify-center ${className}`}>
       <div className={`
         ${sizes[size]}
-        border-2 border-surface-elevated
-        border-t-accent-green
+        border-2 border-zinc-800
+        border-t-emerald-500
         rounded-full
         animate-spin
       `} />
@@ -23,10 +24,14 @@ export default function Loader({ size = 'default', className = '' }) {
 export function PageLoader() {
   return (
     <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-      <div className="flex flex-col items-center gap-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col items-center gap-4"
+      >
         <Loader size="lg" />
-        <p className="text-text-secondary text-subheadline">Загрузка...</p>
-      </div>
+        <p className="text-zinc-500 text-sm">Загрузка...</p>
+      </motion.div>
     </div>
   );
 }

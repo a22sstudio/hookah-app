@@ -4,13 +4,10 @@ import Navbar from './Navbar';
 
 export default function Layout() {
   return (
-    <div className="min-h-screen bg-dark flex flex-col">
-      {/* Main Content */}
-      <main className="flex-1 pb-24 safe-top">
+    <div className="min-h-screen bg-[#0a0a0a]">
+      <main className="pb-28">
         <Outlet />
       </main>
-      
-      {/* Bottom Navigation */}
       <Navbar />
     </div>
   );

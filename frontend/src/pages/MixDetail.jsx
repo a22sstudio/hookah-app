@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, ShoppingBag, Share2, Flame, User, ArrowLeft, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Heart, ShoppingBag, Share2, Flame, User, ThumbsDown } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { getMixById, mixAction } from '../api';
-import { Button, Card, Badge } from '../components/ui';
+import { Card, Button, Badge } from '../components/ui';
 import { PageLoader } from '../components/Loader';
 
 const strengthConfig = {
@@ -18,7 +19,7 @@ export default function MixDetail() {
   const navigate = useNavigate();
   const { user, tg } = useTelegram();
   const queryClient = useQueryClient();
-  const [orderTable, setOrderTable] = useState('');
+  const [isLiked, setIsLiked] = useState(false);
 
   const { data: mix, isLoading } = useQuery({
     queryKey: ['mix', id],
@@ -29,129 +30,182 @@ export default function MixDetail() {
     mutationFn: (data) => mixAction(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['mix', id]);
-      tg.HapticFeedback.notificationOccurred('success');
+      if (tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+      }
     },
   });
 
   if (isLoading) return <PageLoader />;
-  if (!mix) return <div className="p-4 text-center">Микс не найден</div>;
+  if (!mix) return <div className="p-4 text-center text-zinc-500">Микс не найден</div>;
 
   const strength = strengthConfig[mix.userStrength] || strengthConfig.MEDIUM;
   const rating = mix.likesCount - mix.dislikesCount;
 
   const handleAction = (type) => {
-    if (!user) return;
-    tg.HapticFeedback.impactOccurred('medium');
+    if (!user) {
+      alert('Войдите через Telegram');
+      return;
+    }
+    
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.impactOccurred('medium');
+    }
     
     if (type === 'ORDER') {
-      const table = prompt('Введите номер столика:', orderTable);
+      const table = prompt('Введите номер столика:');
       if (table) {
-        setOrderTable(table);
         actionMutation.mutate({ userId: user.id, type, tableNumber: parseInt(table) });
-        alert(`Микс "${mix.name}" заказан на столик ${table}!`);
+        alert(`✅ Микс "${mix.name}" заказан на столик ${table}!`);
       }
+    } else if (type === 'LIKE') {
+      setIsLiked(true);
+      actionMutation.mutate({ userId: user.id, type });
     } else {
       actionMutation.mutate({ userId: user.id, type });
     }
   };
 
   return (
-    <div className="pb-24 animate-fade-in">
-      {/* Navbar with back button */}
-      <div className="sticky top-0 z-10 px-4 py-2 glass flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-text-primary press-effect">
-          <ArrowLeft size={24} />
-        </button>
-        <h1 className="font-heading font-semibold text-headline truncate flex-1">
-          {mix.name}
-        </h1>
-        <button onClick={() => handleAction('ORDER')} className="text-accent-blue press-effect">
-          <Share2 size={24} />
-        </button>
+    <div className="min-h-screen bg-[#0a0a0a] pb-32">
+      {/* Header */}
+      <div className="relative h-56 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/30 to-emerald-950/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent" />
+        
+        {/* Navigation */}
+        <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+          <motion.button 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            onClick={() => navigate(-1)} 
+            className="w-10 h-10 rounded-xl bg-black/30 backdrop-blur-md flex items-center justify-center text-white"
+          >
+            <ArrowLeft size={20} />
+          </motion.button>
+          
+          <motion.button 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="w-10 h-10 rounded-xl bg-black/30 backdrop-blur-md flex items-center justify-center text-white"
+          >
+            <Share2 size={20} />
+          </motion.button>
+        </div>
+
+        {/* Icon */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2"
+        >
+          <div className="w-20 h-20 rounded-2xl bg-emerald-500/20 flex items-center justify-center shadow-xl shadow-emerald-500/20">
+            <Flame size={40} className="text-emerald-400" />
+          </div>
+        </motion.div>
       </div>
 
-      <div className="px-4 py-6">
-        {/* Header Card */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-surface-elevated mb-4 shadow-ios-glow">
-            <Flame size={40} className={`text-accent-${strength.color}`} />
-          </div>
-          <h1 className="font-heading text-title-1 text-text-primary mb-2">
-            {mix.name}
-          </h1>
-          <div className="flex items-center justify-center gap-2">
-            <Badge variant={strength.color} className="text-subheadline px-3 py-1">
+      {/* Content */}
+      <div className="px-4 pt-14">
+        {/* Title */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="text-center mb-6"
+        >
+          <h1 className="text-2xl font-bold text-white mb-2">{mix.name}</h1>
+          <div className="flex items-center justify-center gap-3">
+            <Badge variant={strength.color}>
+              <Flame size={12} className="mr-1" />
               {strength.label}
             </Badge>
-            <span className="text-text-tertiary">•</span>
-            <span className="text-text-secondary flex items-center gap-1">
+            <span className="text-zinc-500 flex items-center gap-1 text-sm">
               <User size={14} />
               {mix.author?.firstName || 'Аноним'}
             </span>
           </div>
           {mix.description && (
-            <p className="mt-4 text-body text-text-secondary leading-relaxed">
-              {mix.description}
-            </p>
+            <p className="mt-4 text-zinc-400 text-sm leading-relaxed">{mix.description}</p>
           )}
-        </div>
+        </motion.div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
-          <Card variant="elevated" className="flex flex-col items-center justify-center py-4">
-            <Heart size={24} className="text-accent-red mb-1" />
-            <span className="font-bold text-title-3">{mix.likesCount}</span>
-            <span className="text-caption-1 text-text-tertiary">Лайков</span>
-          </Card>
-          <Card variant="elevated" className="flex flex-col items-center justify-center py-4">
-            <ShoppingBag size={24} className="text-accent-blue mb-1" />
-            <span className="font-bold text-title-3">{mix.ordersCount}</span>
-            <span className="text-caption-1 text-text-tertiary">Заказов</span>
-          </Card>
-          <Card variant="elevated" className="flex flex-col items-center justify-center py-4">
-            <Flame size={24} className="text-accent-orange mb-1" />
-            <span className="font-bold text-title-3">{strength.percent}%</span>
-            <span className="text-caption-1 text-text-tertiary">Крепость</span>
-          </Card>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="grid grid-cols-3 gap-3 mb-6"
+        >
+          {[
+            { icon: Heart, value: mix.likesCount, label: 'Лайков', color: 'pink' },
+            { icon: ShoppingBag, value: mix.ordersCount, label: 'Заказов', color: 'blue' },
+            { icon: Flame, value: `${strength.percent}%`, label: 'Крепость', color: 'emerald' },
+          ].map((stat, index) => (
+            <Card key={stat.label} variant="elevated" padding="default" className="text-center">
+              <stat.icon size={20} className={`mx-auto mb-1 text-${stat.color}-400`} />
+              <p className="text-lg font-bold text-white">{stat.value}</p>
+              <p className="text-xs text-zinc-500">{stat.label}</p>
+            </Card>
+          ))}
+        </motion.div>
 
         {/* Ingredients */}
-        <section className="mb-8">
-          <h2 className="font-heading font-bold text-title-3 mb-4">Состав микса</h2>
-          <div className="flex flex-col gap-3">
-            {mix.ingredients?.map((ing) => (
-              <div key={ing.id} className="relative">
-                <div className="flex items-center justify-between mb-1.5 z-10 relative">
-                  <span className="font-medium text-body">{ing.flavor.name}</span>
-                  <span className="text-subheadline text-text-secondary">{ing.percentage}%</span>
-                </div>
-                {/* Progress Bar */}
-                <div className="h-3 bg-surface-elevated rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-accent-green opacity-80 rounded-full"
-                    style={{ width: `${ing.percentage}%` }}
-                  />
-                </div>
-                <p className="text-caption-1 text-text-tertiary mt-1">
-                  {ing.flavor.brand.name}
-                </p>
-              </div>
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-8"
+        >
+          <h2 className="text-lg font-bold text-white mb-4">Состав микса</h2>
+          <div className="space-y-3">
+            {mix.ingredients?.map((ing, index) => (
+              <motion.div
+                key={ing.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 * index }}
+              >
+                <Card variant="default" padding="default">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-white">{ing.flavor.name}</span>
+                    <span className="text-emerald-400 font-semibold">{ing.percentage}%</span>
+                  </div>
+                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${ing.percentage}%` }}
+                      transition={{ delay: 0.3 + 0.1 * index, duration: 0.5 }}
+                      className="h-full bg-emerald-500 rounded-full"
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">{ing.flavor.brand?.name}</p>
+                </Card>
+              </motion.div>
             ))}
           </div>
-        </section>
+        </motion.section>
+      </div>
 
-        {/* Actions */}
-        <div className="flex gap-3 mt-auto">
+      {/* Fixed Bottom Actions */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a] to-transparent pt-8"
+      >
+        <div className="flex gap-3 max-w-md mx-auto">
           <Button 
-            variant="secondary" 
+            variant={isLiked ? 'primary' : 'secondary'}
             className="flex-1"
             onClick={() => handleAction('LIKE')}
             icon={Heart}
           >
-            Лайк
+            {isLiked ? 'Liked!' : 'Лайк'}
           </Button>
           <Button 
-            variant="primary" 
+            variant="primary"
             className="flex-[2]"
             onClick={() => handleAction('ORDER')}
             icon={ShoppingBag}
@@ -159,7 +213,7 @@ export default function MixDetail() {
             Заказать
           </Button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
