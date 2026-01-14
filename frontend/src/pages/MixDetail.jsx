@@ -1,215 +1,165 @@
-import { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Heart, ThumbsDown, ShoppingCart, User } from 'lucide-react';
-import { getMixById, mixAction } from '../api';
-import Loader from '../components/Loader';
-import { formatStrength } from '../utils/helpers';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Heart, ShoppingBag, Share2, Flame, User, ArrowLeft, Check } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
+import { getMixById, mixAction } from '../api';
+import { Button, Card, Badge } from '../components/ui';
+import { PageLoader } from '../components/Loader';
 
-const MixDetail = () => {
+const strengthConfig = {
+  LIGHT: { label: 'Лёгкий', color: 'green', percent: 30 },
+  MEDIUM: { label: 'Средний', color: 'orange', percent: 60 },
+  STRONG: { label: 'Крепкий', color: 'red', percent: 90 },
+};
+
+export default function MixDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, hapticFeedback, showAlert } = useTelegram();
-  const [mix, setMix] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [ordering, setOrdering] = useState(false);
-  const [tableNumber, setTableNumber] = useState('');
+  const { user, tg } = useTelegram();
+  const queryClient = useQueryClient();
+  const [orderTable, setOrderTable] = useState('');
 
-  useEffect(() => {
-    const fetchMix = async () => {
-      try {
-        const data = await getMixById(id);
-        setMix(data);
-      } catch (error) {
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMix();
-  }, [id]);
+  const { data: mix, isLoading } = useQuery({
+    queryKey: ['mix', id],
+    queryFn: () => getMixById(id),
+  });
 
-  const handleLike = async () => {
-    if (!user) return showAlert('Откройте через Telegram');
-    hapticFeedback('impact', 'light');
-    try {
-      await mixAction(mix.id, { userId: user.id, type: 'LIKE' });
-      setMix(prev => ({ ...prev, likesCount: (prev.likesCount || 0) + 1 }));
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
+  const actionMutation = useMutation({
+    mutationFn: (data) => mixAction(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['mix', id]);
+      tg.HapticFeedback.notificationOccurred('success');
+    },
+  });
 
-  const handleDislike = async () => {
-    if (!user) return showAlert('Откройте через Telegram');
-    hapticFeedback('impact', 'light');
-    try {
-      await mixAction(mix.id, { userId: user.id, type: 'DISLIKE' });
-      setMix(prev => ({ ...prev, dislikesCount: (prev.dislikesCount || 0) + 1 }));
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
+  if (isLoading) return <PageLoader />;
+  if (!mix) return <div className="p-4 text-center">Микс не найден</div>;
 
-  const handleOrder = async () => {
-    if (!user) return showAlert('Откройте через Telegram');
-    if (!tableNumber) return showAlert('Укажите номер столика');
+  const strength = strengthConfig[mix.userStrength] || strengthConfig.MEDIUM;
+  const rating = mix.likesCount - mix.dislikesCount;
+
+  const handleAction = (type) => {
+    if (!user) return;
+    tg.HapticFeedback.impactOccurred('medium');
     
-    hapticFeedback('notification', 'success');
-    try {
-      await mixAction(mix.id, {
-        userId: user.id,
-        type: 'ORDER',
-        tableNumber: parseInt(tableNumber),
-      });
-      showAlert('✅ Заказ отправлен!');
-      setOrdering(false);
-      setTableNumber('');
-      setMix(prev => ({ ...prev, ordersCount: (prev.ordersCount || 0) + 1 }));
-    } catch (error) {
-      console.error('Error:', error);
-      showAlert('Ошибка при заказе');
+    if (type === 'ORDER') {
+      const table = prompt('Введите номер столика:', orderTable);
+      if (table) {
+        setOrderTable(table);
+        actionMutation.mutate({ userId: user.id, type, tableNumber: parseInt(table) });
+        alert(`Микс "${mix.name}" заказан на столик ${table}!`);
+      }
+    } else {
+      actionMutation.mutate({ userId: user.id, type });
     }
   };
-
-  if (loading) return <Loader />;
-  if (!mix) return <div className="p-4 text-center text-gray-400">Микс не найден</div>;
 
   return (
-    <div className="min-h-screen pb-32">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-hookah-dark/95 backdrop-blur-lg border-b border-white/5">
-        <div className="flex items-center gap-4 px-4 py-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-white/5 rounded-xl transition-colors"
-          >
-            <ArrowLeft size={24} className="text-white" />
-          </button>
-          <h1 className="text-lg font-semibold text-white truncate">{mix.name}</h1>
-        </div>
+    <div className="pb-24 animate-fade-in">
+      {/* Navbar with back button */}
+      <div className="sticky top-0 z-10 px-4 py-2 glass flex items-center gap-4">
+        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-text-primary press-effect">
+          <ArrowLeft size={24} />
+        </button>
+        <h1 className="font-heading font-semibold text-headline truncate flex-1">
+          {mix.name}
+        </h1>
+        <button onClick={() => handleAction('ORDER')} className="text-accent-blue press-effect">
+          <Share2 size={24} />
+        </button>
       </div>
 
-      {/* Content */}
       <div className="px-4 py-6">
-        {/* Info Card */}
-        <div className="bg-hookah-card rounded-2xl p-6 border border-white/5 mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-2">{mix.name}</h2>
-              <div className="flex items-center gap-2 text-gray-400">
-                <User size={16} />
-                <span>{mix.author?.firstName || mix.author?.username || 'Аноним'}</span>
-              </div>
-            </div>
-            <span className="px-3 py-1.5 bg-hookah-primary/20 text-hookah-primary text-sm rounded-lg font-medium">
-              {formatStrength(mix.userStrength)}
+        {/* Header Card */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-surface-elevated mb-4 shadow-ios-glow">
+            <Flame size={40} className={`text-accent-${strength.color}`} />
+          </div>
+          <h1 className="font-heading text-title-1 text-text-primary mb-2">
+            {mix.name}
+          </h1>
+          <div className="flex items-center justify-center gap-2">
+            <Badge variant={strength.color} className="text-subheadline px-3 py-1">
+              {strength.label}
+            </Badge>
+            <span className="text-text-tertiary">•</span>
+            <span className="text-text-secondary flex items-center gap-1">
+              <User size={14} />
+              {mix.author?.firstName || 'Аноним'}
             </span>
           </div>
-
           {mix.description && (
-            <p className="text-gray-300 mb-4">{mix.description}</p>
+            <p className="mt-4 text-body text-text-secondary leading-relaxed">
+              {mix.description}
+            </p>
           )}
+        </div>
 
-          {/* Stats */}
-          <div className="flex gap-6 pt-4 border-t border-white/5">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-white">{mix.likesCount || 0}</p>
-              <p className="text-xs text-gray-400">Лайков</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-white">{mix.ordersCount || 0}</p>
-              <p className="text-xs text-gray-400">Заказов</p>
-            </div>
-            {mix.rating > 0 && (
-              <div className="text-center">
-                <p className="text-2xl font-bold text-yellow-500">⭐ {mix.rating.toFixed(1)}</p>
-                <p className="text-xs text-gray-400">Рейтинг</p>
-              </div>
-            )}
-          </div>
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-3 mb-8">
+          <Card variant="elevated" className="flex flex-col items-center justify-center py-4">
+            <Heart size={24} className="text-accent-red mb-1" />
+            <span className="font-bold text-title-3">{mix.likesCount}</span>
+            <span className="text-caption-1 text-text-tertiary">Лайков</span>
+          </Card>
+          <Card variant="elevated" className="flex flex-col items-center justify-center py-4">
+            <ShoppingBag size={24} className="text-accent-blue mb-1" />
+            <span className="font-bold text-title-3">{mix.ordersCount}</span>
+            <span className="text-caption-1 text-text-tertiary">Заказов</span>
+          </Card>
+          <Card variant="elevated" className="flex flex-col items-center justify-center py-4">
+            <Flame size={24} className="text-accent-orange mb-1" />
+            <span className="font-bold text-title-3">{strength.percent}%</span>
+            <span className="text-caption-1 text-text-tertiary">Крепость</span>
+          </Card>
         </div>
 
         {/* Ingredients */}
-        <div className="bg-hookah-card rounded-2xl p-6 border border-white/5 mb-6">
-          <h3 className="text-lg font-semibold text-white mb-4">🌿 Состав</h3>
-          <div className="space-y-3">
+        <section className="mb-8">
+          <h2 className="font-heading font-bold text-title-3 mb-4">Состав микса</h2>
+          <div className="flex flex-col gap-3">
             {mix.ingredients?.map((ing) => (
-              <div
-                key={ing.id}
-                className="flex justify-between items-center p-3 bg-hookah-dark rounded-xl"
-              >
-                <div>
-                  <p className="font-medium text-white">{ing.flavor?.name}</p>
-                  <p className="text-sm text-gray-400">{ing.flavor?.brand?.name}</p>
+              <div key={ing.id} className="relative">
+                <div className="flex items-center justify-between mb-1.5 z-10 relative">
+                  <span className="font-medium text-body">{ing.flavor.name}</span>
+                  <span className="text-subheadline text-text-secondary">{ing.percentage}%</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-hookah-primary">{ing.percentage}%</p>
+                {/* Progress Bar */}
+                <div className="h-3 bg-surface-elevated rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-accent-green opacity-80 rounded-full"
+                    style={{ width: `${ing.percentage}%` }}
+                  />
                 </div>
+                <p className="text-caption-1 text-text-tertiary mt-1">
+                  {ing.flavor.brand.name}
+                </p>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
         {/* Actions */}
-        <div className="flex gap-3 mb-6">
-          <button
-            onClick={handleLike}
-            className="flex-1 py-3 bg-hookah-card rounded-xl flex items-center justify-center gap-2 
-                       text-gray-300 hover:text-red-400 hover:bg-red-400/10 transition-all"
+        <div className="flex gap-3 mt-auto">
+          <Button 
+            variant="secondary" 
+            className="flex-1"
+            onClick={() => handleAction('LIKE')}
+            icon={Heart}
           >
-            <Heart size={20} />
-            <span>Нравится</span>
-          </button>
-          <button
-            onClick={handleDislike}
-            className="flex-1 py-3 bg-hookah-card rounded-xl flex items-center justify-center gap-2 
-                       text-gray-300 hover:text-gray-400 transition-all"
+            Лайк
+          </Button>
+          <Button 
+            variant="primary" 
+            className="flex-[2]"
+            onClick={() => handleAction('ORDER')}
+            icon={ShoppingBag}
           >
-            <ThumbsDown size={20} />
-            <span>Не нравится</span>
-          </button>
+            Заказать
+          </Button>
         </div>
-      </div>
-
-      {/* Order Section */}
-      <div className="fixed bottom-20 left-0 right-0 p-4 bg-hookah-dark/95 backdrop-blur-lg border-t border-white/5">
-        {ordering ? (
-          <div className="flex gap-3">
-            <input
-              type="number"
-              value={tableNumber}
-              onChange={(e) => setTableNumber(e.target.value)}
-              placeholder="№ столика"
-              className="flex-1 px-4 py-3 bg-hookah-card border border-white/10 rounded-xl 
-                         text-white placeholder-gray-500 focus:outline-none focus:border-hookah-primary/50"
-            />
-            <button
-              onClick={handleOrder}
-              className="px-6 py-3 bg-hookah-primary rounded-xl text-white font-semibold"
-            >
-              ОК
-            </button>
-            <button
-              onClick={() => setOrdering(false)}
-              className="px-4 py-3 bg-hookah-card rounded-xl text-gray-400"
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setOrdering(true)}
-            className="w-full py-4 bg-gradient-to-r from-hookah-primary to-hookah-secondary 
-                       rounded-2xl text-white font-semibold flex items-center justify-center gap-2"
-          >
-            <ShoppingCart size={20} />
-            Заказать на столик
-          </button>
-        )}
       </div>
     </div>
   );
-};
-
-export default MixDetail;
+}

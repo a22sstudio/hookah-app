@@ -1,39 +1,50 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
+import { Card, Badge } from './ui';
 
-const BrandCard = ({ brand }) => {
+export default function BrandCard({ brand }) {
   const navigate = useNavigate();
 
   return (
-    <button
-      onClick={() => navigate(`/flavors?brandId=${brand.id}`)}
-      className="w-full p-4 bg-hookah-card rounded-2xl border border-white/5 
-                 hover:border-hookah-primary/30 transition-all duration-300
-                 flex items-center gap-4 group"
+    <Card
+      variant="default"
+      padding="none"
+      onClick={() => navigate(`/flavors?brand=${brand.slug}`)}
+      className="overflow-hidden group"
     >
-      {/* Лого */}
-      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-hookah-primary/20 to-hookah-secondary/20 
-                      flex items-center justify-center text-2xl flex-shrink-0">
-        {brand.logo || brand.name.charAt(0)}
-      </div>
-      
-      {/* Инфо */}
-      <div className="flex-1 text-left">
-        <h3 className="font-semibold text-white group-hover:text-hookah-primary transition-colors">
-          {brand.name}
-        </h3>
-        <p className="text-sm text-gray-400">
-          {brand._count?.flavors || 0} вкусов
-        </p>
-      </div>
-      
-      {/* Стрелка */}
-      <ChevronRight 
-        className="text-gray-500 group-hover:text-hookah-primary group-hover:translate-x-1 transition-all" 
-        size={20} 
-      />
-    </button>
-  );
-};
+      <div className="flex items-center gap-4 p-4">
+        {/* Logo */}
+        <div className="w-14 h-14 rounded-ios-lg bg-surface-elevated flex items-center justify-center overflow-hidden flex-shrink-0">
+          {brand.logo ? (
+            <img 
+              src={brand.logo} 
+              alt={brand.name}
+              className="w-10 h-10 object-contain"
+            />
+          ) : (
+            <span className="text-title-3 font-heading font-bold text-accent-green">
+              {brand.name.charAt(0)}
+            </span>
+          )}
+        </div>
 
-export default BrandCard;
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <h3 className="font-heading font-semibold text-headline text-text-primary truncate">
+            {brand.name}
+          </h3>
+          <p className="text-subheadline text-text-secondary mt-0.5">
+            {brand._count?.flavors || 0} вкусов
+          </p>
+        </div>
+
+        {/* Arrow */}
+        <ChevronRight 
+          size={20} 
+          className="text-text-tertiary group-hover:text-text-secondary transition-colors flex-shrink-0" 
+        />
+      </div>
+    </Card>
+  );
+}

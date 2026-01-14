@@ -1,66 +1,98 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatTag } from '../utils/helpers';
+import { Flame } from 'lucide-react';
+import { Card, Badge } from './ui';
 
-const FlavorCard = ({ flavor, onSelect, selectable = false, selected = false }) => {
-  const navigate = useNavigate();
-
-  const handleClick = () => {
-    if (selectable && onSelect) {
-      onSelect(flavor);
-    } else {
-      navigate(`/flavors/${flavor.id}`);
-    }
-  };
-
-  return (
-    <button
-      onClick={handleClick}
-      className={`w-full p-4 rounded-2xl border transition-all duration-300 text-left
-        ${selected 
-          ? 'bg-hookah-primary/20 border-hookah-primary shadow-lg shadow-hookah-primary/10' 
-          : 'bg-hookah-card border-white/5 hover:border-white/20'
-        }`}
-    >
-      {/* Верх: название и бренд */}
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <h3 className="font-semibold text-white">{flavor.name}</h3>
-          <p className="text-sm text-gray-400">{flavor.brand?.name}</p>
-        </div>
-        {selected && (
-          <div className="w-6 h-6 bg-hookah-primary rounded-full flex items-center justify-center">
-            <span className="text-white text-sm">✓</span>
-          </div>
-        )}
-      </div>
-
-      {/* Описание */}
-      {flavor.description && (
-        <p className="text-sm text-gray-400 mb-3 line-clamp-2">
-          {flavor.description}
-        </p>
-      )}
-
-      {/* Теги */}
-      {flavor.flavorProfile && flavor.flavorProfile.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {flavor.flavorProfile.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-0.5 bg-white/5 rounded-full text-xs text-gray-300"
-            >
-              {formatTag(tag)}
-            </span>
-          ))}
-          {flavor.flavorProfile.length > 3 && (
-            <span className="px-2 py-0.5 text-xs text-gray-500">
-              +{flavor.flavorProfile.length - 3}
-            </span>
-          )}
-        </div>
-      )}
-    </button>
-  );
+const strengthConfig = {
+  LIGHT: { label: 'Лёгкий', color: 'green', dots: 1 },
+  MEDIUM: { label: 'Средний', color: 'orange', dots: 2 },
+  STRONG: { label: 'Крепкий', color: 'red', dots: 3 },
 };
 
-export default FlavorCard;
+const tagLabels = {
+  SWEET: 'Сладкий',
+  SOUR: 'Кислый',
+  FRESH: 'Свежий',
+  FRUITY: 'Фруктовый',
+  BERRY: 'Ягодный',
+  CITRUS: 'Цитрус',
+  MINT: 'Мята',
+  ICE: 'Лёд',
+  TROPICAL: 'Тропик',
+  CREAMY: 'Сливочный',
+  DESSERT: 'Десерт',
+  SPICY: 'Пряный',
+};
+
+export default function FlavorCard({ flavor, showBrand = true }) {
+  const navigate = useNavigate();
+  const strength = strengthConfig[flavor.strength] || strengthConfig.MEDIUM;
+
+  return (
+    <Card
+      variant="default"
+      padding="default"
+      onClick={() => navigate(`/flavors/${flavor.id}`)}
+      className="group"
+    >
+      <div className="flex items-start gap-3">
+        {/* Strength indicator */}
+        <div className={`
+          w-10 h-10 rounded-ios-lg flex items-center justify-center flex-shrink-0
+          ${strength.color === 'green' ? 'bg-accent-green/15' : ''}
+          ${strength.color === 'orange' ? 'bg-accent-orange/15' : ''}
+          ${strength.color === 'red' ? 'bg-accent-red/15' : ''}
+        `}>
+          <Flame 
+            size={20} 
+            className={`
+              ${strength.color === 'green' ? 'text-accent-green' : ''}
+              ${strength.color === 'orange' ? 'text-accent-orange' : ''}
+              ${strength.color === 'red' ? 'text-accent-red' : ''}
+            `}
+          />
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="font-heading font-semibold text-headline text-text-primary truncate">
+                {flavor.name}
+              </h3>
+              {showBrand && flavor.brand && (
+                <p className="text-subheadline text-text-secondary mt-0.5">
+                  {flavor.brand.name}
+                </p>
+              )}
+            </div>
+            
+            {/* Strength badge */}
+            <Badge variant={strength.color} className="flex-shrink-0">
+              {strength.label}
+            </Badge>
+          </div>
+
+          {/* Tags */}
+          {flavor.flavorProfile && flavor.flavorProfile.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {flavor.flavorProfile.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="text-caption-1 text-text-tertiary bg-surface-elevated px-2 py-0.5 rounded-full"
+                >
+                  {tagLabels[tag] || tag}
+                </span>
+              ))}
+              {flavor.flavorProfile.length > 3 && (
+                <span className="text-caption-1 text-text-tertiary">
+                  +{flavor.flavorProfile.length - 3}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}

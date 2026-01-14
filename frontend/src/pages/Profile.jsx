@@ -1,169 +1,150 @@
-import { useEffect, useState } from 'react';
-import { User, Heart, ShoppingCart, Sparkles, LogOut } from 'lucide-react';
-import { getUserActions } from '../api';
-import MixCard from '../components/MixCard';
-import Loader from '../components/Loader';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { User, Heart, ShoppingBag, Plus, ChevronRight } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
+import { getUser, getUserActions } from '../api';
+import { Card, Badge } from '../components/ui';
+import { PageLoader } from '../components/Loader';
 
-const Profile = () => {
-  const { user, close } = useTelegram();
-  const [actions, setActions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('likes');
+export default function Profile() {
+  const { user: tgUser, isReady } = useTelegram();
 
-  useEffect(() => {
-    const fetchActions = async () => {
-      if (!user?.id) {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const data = await getUserActions(user.id);
-        setActions(data);
-      } catch (error) {
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchActions();
-  }, [user]);
+  const { data: user, isLoading: userLoading } = useQuery({
+    queryKey: ['user', tgUser?.id],
+    queryFn: () => getUser(tgUser?.id),
+    enabled: !!tgUser?.id,
+  });
 
-  const likedMixes = actions
-    .filter(a => a.type === 'LIKE' && a.mix)
-    .map(a => a.mix);
-  
-  const orderedMixes = actions
-    .filter(a => a.type === 'ORDER' && a.mix)
-    .map(a => a.mix);
+  const { data: actions, isLoading: actionsLoading } = useQuery({
+    queryKey: ['userActions', tgUser?.id],
+    queryFn: () => getUserActions(tgUser?.id),
+    enabled: !!tgUser?.id,
+  });
 
-  const tabs = [
-    { id: 'likes', label: 'Понравилось', icon: Heart, count: likedMixes.length },
-    { id: 'orders', label: 'Заказы', icon: ShoppingCart, count: orderedMixes.length },
-  ];
-
-  if (!user) {
-    return (
-      <div className="px-4 py-6">
-        <div className="text-center py-12">
-          <User size={48} className="text-gray-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">Вы не авторизованы</h2>
-          <p className="text-gray-400">
-            Откройте приложение через Telegram бота
-          </p>
-        </div>
-      </div>
-    );
+  if (!isReady || userLoading) {
+    return <PageLoader />;
   }
 
+  const displayName = tgUser?.first_name || user?.firstName || 'Гость';
+  const username = tgUser?.username || user?.username;
+
+  const stats = {
+    likes: actions?.filter(a => a.type === 'LIKE').length || 0,
+    orders: actions?.filter(a => a.type === 'ORDER').length || 0,
+    mixes: user?.mixes?.length || 0,
+  };
+
   return (
-    <div className="px-4 py-6">
-      {/* Profile Card */}
-      <div className="bg-hookah-card rounded-2xl p-6 border border-white/5 mb-6">
-        <div className="flex items-center gap-4">
-          {/* Avatar */}
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-hookah-primary to-hookah-secondary 
-                          flex items-center justify-center text-2xl font-bold text-white">
-            {user.first_name?.charAt(0) || '?'}
-          </div>
-          
-          {/* Info */}
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-white">
-              {user.first_name} {user.last_name || ''}
-            </h2>
-            {user.username && (
-              <p className="text-gray-400">@{user.username}</p>
-            )}
-          </div>
+    <div className="px-4 py-6 animate-fade-in">
+      {/* Profile Header */}
+      <header className="flex items-center gap-4 mb-8">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-accent-green to-accent-blue flex items-center justify-center">
+          <span className="text-title-1 font-heading font-bold text-white">
+            {displayName.charAt(0).toUpperCase()}
+          </span>
         </div>
         
-        {/* Stats */}
-        <div className="flex gap-6 mt-6 pt-6 border-t border-white/5">
-          <div className="text-center flex-1">
-            <p className="text-2xl font-bold text-white">{likedMixes.length}</p>
-            <p className="text-xs text-gray-400">Лайков</p>
-          </div>
-          <div className="text-center flex-1">
-            <p className="text-2xl font-bold text-white">{orderedMixes.length}</p>
-            <p className="text-xs text-gray-400">Заказов</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl 
-                        font-medium transition-all ${
-              activeTab === tab.id
-                ? 'bg-hookah-primary text-white'
-                : 'bg-hookah-card text-gray-400'
-            }`}
-          >
-            <tab.icon size={18} />
-            {tab.label}
-            {tab.count > 0 && (
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === tab.id ? 'bg-white/20' : 'bg-hookah-dark'
-              }`}>
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <Loader />
-      ) : (
-        <div className="space-y-4">
-          {activeTab === 'likes' && (
-            likedMixes.length === 0 ? (
-              <div className="text-center py-12">
-                <Heart size={48} className="text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-400">Пока нет лайков</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Лайкните миксы, которые вам понравились
-                </p>
-              </div>
-            ) : (
-              likedMixes.map(mix => <MixCard key={mix.id} mix={mix} />)
-            )
-          )}
-          
-          {activeTab === 'orders' && (
-            orderedMixes.length === 0 ? (
-              <div className="text-center py-12">
-                <ShoppingCart size={48} className="text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-400">Пока нет заказов</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Закажите микс на столик
-                </p>
-              </div>
-            ) : (
-              orderedMixes.map(mix => <MixCard key={mix.id} mix={mix} />)
-            )
+        <div className="flex-1">
+          <h1 className="font-heading text-title-2 text-text-primary">
+            {displayName}
+          </h1>
+          {username && (
+            <p className="text-subheadline text-text-secondary">
+              @{username}
+            </p>
           )}
         </div>
-      )}
+      </header>
 
-      {/* Close Button */}
-      <button
-        onClick={close}
-        className="w-full mt-8 py-4 bg-hookah-card rounded-2xl text-gray-400 
-                   flex items-center justify-center gap-2 hover:text-white transition-colors"
-      >
-        <LogOut size={20} />
-        Закрыть приложение
-      </button>
+      {/* Stats */}
+      <section className="mb-8">
+        <div className="grid grid-cols-3 gap-3">
+          <Card variant="default" padding="default" className="text-center">
+            <div className="w-10 h-10 mx-auto mb-2 rounded-ios-lg bg-accent-red/15 flex items-center justify-center">
+              <Heart size={20} className="text-accent-red" />
+            </div>
+            <p className="font-heading font-bold text-title-3 text-text-primary">
+              {stats.likes}
+            </p>
+            <p className="text-caption-1 text-text-secondary">
+              Лайков
+            </p>
+          </Card>
+
+          <Card variant="default" padding="default" className="text-center">
+            <div className="w-10 h-10 mx-auto mb-2 rounded-ios-lg bg-accent-blue/15 flex items-center justify-center">
+              <ShoppingBag size={20} className="text-accent-blue" />
+            </div>
+            <p className="font-heading font-bold text-title-3 text-text-primary">
+              {stats.orders}
+            </p>
+            <p className="text-caption-1 text-text-secondary">
+              Заказов
+            </p>
+          </Card>
+
+          <Card variant="default" padding="default" className="text-center">
+            <div className="w-10 h-10 mx-auto mb-2 rounded-ios-lg bg-accent-green/15 flex items-center justify-center">
+              <Plus size={20} className="text-accent-green" />
+            </div>
+            <p className="font-heading font-bold text-title-3 text-text-primary">
+              {stats.mixes}
+            </p>
+            <p className="text-caption-1 text-text-secondary">
+              Миксов
+            </p>
+          </Card>
+        </div>
+      </section>
+
+      {/* Recent Activity */}
+      <section>
+        <h2 className="font-heading font-bold text-title-3 text-text-primary mb-4">
+          Последняя активность
+        </h2>
+        
+        {actions && actions.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {actions.slice(0, 5).map((action) => (
+              <Card key={action.id} variant="default" padding="default">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-ios-lg flex items-center justify-center ${
+                    action.type === 'LIKE' ? 'bg-accent-red/15' :
+                    action.type === 'ORDER' ? 'bg-accent-blue/15' :
+                    'bg-surface-elevated'
+                  }`}>
+                    {action.type === 'LIKE' && <Heart size={18} className="text-accent-red" />}
+                    {action.type === 'ORDER' && <ShoppingBag size={18} className="text-accent-blue" />}
+                    {action.type === 'DISLIKE' && <Heart size={18} className="text-text-tertiary" />}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body text-text-primary truncate">
+                      {action.mix?.name || 'Микс'}
+                    </p>
+                    <p className="text-caption-1 text-text-secondary">
+                      {action.type === 'LIKE' && 'Понравилось'}
+                      {action.type === 'DISLIKE' && 'Не понравилось'}
+                      {action.type === 'ORDER' && `Заказ на стол ${action.tableNumber || '—'}`}
+                    </p>
+                  </div>
+                  
+                  <ChevronRight size={18} className="text-text-tertiary" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card variant="default" padding="lg" className="text-center">
+            <p className="text-text-secondary text-body">
+              Пока нет активности
+            </p>
+            <p className="text-text-tertiary text-caption-1 mt-1">
+              Лайкайте миксы и делайте заказы
+            </p>
+          </Card>
+        )}
+      </section>
     </div>
   );
-};
-
-export default Profile;
+}

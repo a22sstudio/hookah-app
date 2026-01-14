@@ -1,94 +1,100 @@
-import { useEffect, useState } from 'react';
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Flame, Tag } from 'lucide-react';
 import { getFlavorById } from '../api';
-import Loader from '../components/Loader';
-import { formatTag } from '../utils/helpers';
+import { Card, Badge } from '../components/ui';
+import { PageLoader } from '../components/Loader';
 
-const FlavorDetail = () => {
+const strengthConfig = {
+  LIGHT: { label: 'Лёгкий', color: 'green' },
+  MEDIUM: { label: 'Средний', color: 'orange' },
+  STRONG: { label: 'Крепкий', color: 'red' },
+};
+
+export default function FlavorDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [flavor, setFlavor] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchFlavor = async () => {
-      try {
-        const data = await getFlavorById(id);
-        setFlavor(data);
-      } catch (error) {
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFlavor();
-  }, [id]);
+  const { data: flavor, isLoading } = useQuery({
+    queryKey: ['flavor', id],
+    queryFn: () => getFlavorById(id),
+  });
 
-  if (loading) return <Loader />;
-  if (!flavor) return <div className="p-4 text-center text-gray-400">Вкус не найден</div>;
+  if (isLoading) return <PageLoader />;
+  if (!flavor) return <div className="p-4 text-center">Вкус не найден</div>;
+
+  const strength = strengthConfig[flavor.strength] || strengthConfig.MEDIUM;
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-hookah-dark/95 backdrop-blur-lg border-b border-white/5">
-        <div className="flex items-center gap-4 px-4 py-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-white/5 rounded-xl transition-colors"
+    <div className="min-h-screen bg-dark animate-fade-in">
+      {/* Header Image / Pattern */}
+      <div className="h-48 bg-surface-elevated relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-dark" />
+        <div className="absolute inset-0 flex items-center justify-center opacity-10">
+          <span className="text-[120px] font-bold text-white">{flavor.name.charAt(0)}</span>
+        </div>
+        
+        {/* Nav */}
+        <div className="absolute top-0 left-0 right-0 p-4 safe-top flex items-center">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white press-effect"
           >
-            <ArrowLeft size={24} className="text-white" />
+            <ArrowLeft size={20} />
           </button>
-          <h1 className="text-lg font-semibold text-white truncate">
-            {flavor.name}
-          </h1>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-4 py-6">
-        {/* Main Info */}
-        <div className="bg-hookah-card rounded-2xl p-6 border border-white/5 mb-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-1">{flavor.name}</h2>
-              <p className="text-hookah-primary font-medium">{flavor.brand?.name}</p>
-            </div>
+      <div className="px-4 -mt-12 relative z-10">
+        <div className="flex justify-between items-end mb-4">
+          <div className="w-24 h-24 rounded-ios-xl bg-surface-elevated border-4 border-dark flex items-center justify-center shadow-lg">
+             {flavor.brand.logo ? (
+                <img src={flavor.brand.logo} alt="" className="w-16 h-16 object-contain" />
+             ) : (
+                <span className="text-3xl font-bold text-accent-green">{flavor.brand.name.charAt(0)}</span>
+             )}
           </div>
-
-          {flavor.description && (
-            <p className="text-gray-300 mb-4">{flavor.description}</p>
-          )}
-
-          {/* Tags */}
-          {flavor.flavorProfile && flavor.flavorProfile.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {flavor.flavorProfile.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1.5 bg-hookah-primary/10 text-hookah-primary 
-                             rounded-full text-sm font-medium"
-                >
-                  {formatTag(tag)}
-                </span>
-              ))}
-            </div>
-          )}
+          <Badge variant={strength.color} className="mb-4 px-3 py-1.5 text-body">
+            <Flame size={16} className="mr-1.5" />
+            {strength.label}
+          </Badge>
         </div>
 
-        {/* Actions */}
-        <button
-          onClick={() => navigate('/create-mix', { state: { selectedFlavor: flavor } })}
-          className="w-full py-4 bg-gradient-to-r from-hookah-primary to-hookah-secondary 
-                     rounded-2xl text-white font-semibold flex items-center justify-center gap-2
-                     hover:opacity-90 transition-opacity"
-        >
-          <Plus size={20} />
-          Добавить в микс
-        </button>
+        <h1 className="font-heading text-display text-text-primary mb-2">
+          {flavor.name}
+        </h1>
+        <p className="text-title-3 text-text-secondary mb-6">
+          {flavor.brand.name}
+        </p>
+
+        {flavor.description && (
+          <div className="mb-8">
+            <h3 className="font-heading font-semibold text-headline mb-2">Описание</h3>
+            <p className="text-body text-text-secondary leading-relaxed">
+              {flavor.description}
+            </p>
+          </div>
+        )}
+
+        {/* Tags */}
+        <div className="mb-8">
+          <h3 className="font-heading font-semibold text-headline mb-3 flex items-center gap-2">
+            <Tag size={18} />
+            Характеристики
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {flavor.flavorProfile?.map((tag) => (
+              <span 
+                key={tag}
+                className="px-4 py-2 rounded-full bg-surface-elevated text-text-secondary text-subheadline border border-border"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
-};
-
-export default FlavorDetail;
+}

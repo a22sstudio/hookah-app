@@ -1,73 +1,90 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, ShoppingCart, User } from 'lucide-react';
-import { formatStrength } from '../utils/helpers';
+import { Heart, ShoppingBag, Flame } from 'lucide-react';
+import { Card, Badge } from './ui';
 
-const MixCard = ({ mix }) => {
-  const navigate = useNavigate();
-
-  return (
-    <button
-      onClick={() => navigate(`/mixes/${mix.id}`)}
-      className="w-full p-4 bg-hookah-card rounded-2xl border border-white/5 
-                 hover:border-hookah-primary/30 transition-all duration-300 text-left"
-    >
-      {/* Заголовок */}
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <h3 className="font-semibold text-white text-lg">{mix.name}</h3>
-          <div className="flex items-center gap-2 mt-1">
-            <User size={14} className="text-gray-500" />
-            <span className="text-sm text-gray-400">
-              {mix.author?.firstName || mix.author?.username || 'Аноним'}
-            </span>
-          </div>
-        </div>
-        <span className="px-2 py-1 bg-hookah-primary/20 text-hookah-primary text-xs rounded-lg font-medium">
-          {formatStrength(mix.userStrength)}
-        </span>
-      </div>
-
-      {/* Ингредиенты */}
-      <div className="space-y-2 mb-4">
-        {mix.ingredients?.slice(0, 3).map((ing) => (
-          <div key={ing.id} className="flex justify-between items-center">
-            <span className="text-sm text-gray-300">
-              {ing.flavor?.name}
-              <span className="text-gray-500 ml-1">
-                ({ing.flavor?.brand?.name})
-              </span>
-            </span>
-            <span className="text-sm text-hookah-primary font-medium">
-              {ing.percentage}%
-            </span>
-          </div>
-        ))}
-        {mix.ingredients?.length > 3 && (
-          <p className="text-sm text-gray-500">
-            +{mix.ingredients.length - 3} ещё
-          </p>
-        )}
-      </div>
-
-      {/* Статистика */}
-      <div className="flex items-center gap-4 pt-3 border-t border-white/5">
-        <div className="flex items-center gap-1.5 text-gray-400">
-          <Heart size={16} />
-          <span className="text-sm">{mix.likesCount || 0}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-gray-400">
-          <ShoppingCart size={16} />
-          <span className="text-sm">{mix.ordersCount || 0}</span>
-        </div>
-        {mix.rating > 0 && (
-          <div className="flex items-center gap-1.5 text-yellow-500 ml-auto">
-            <span>⭐</span>
-            <span className="text-sm">{mix.rating.toFixed(1)}</span>
-          </div>
-        )}
-      </div>
-    </button>
-  );
+const strengthConfig = {
+  LIGHT: { label: 'Лёгкий', color: 'green' },
+  MEDIUM: { label: 'Средний', color: 'orange' },
+  STRONG: { label: 'Крепкий', color: 'red' },
 };
 
-export default MixCard;
+export default function MixCard({ mix }) {
+  const navigate = useNavigate();
+  const strength = strengthConfig[mix.userStrength] || strengthConfig.MEDIUM;
+  
+  const rating = mix.likesCount - mix.dislikesCount;
+
+  return (
+    <Card
+      variant="default"
+      padding="none"
+      onClick={() => navigate(`/mixes/${mix.id}`)}
+      className="overflow-hidden group"
+    >
+      {/* Header gradient */}
+      <div className="h-2 gradient-accent opacity-60" />
+      
+      <div className="p-4">
+        {/* Title and strength */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <h3 className="font-heading font-semibold text-headline text-text-primary line-clamp-2">
+            {mix.name}
+          </h3>
+          <Badge variant={strength.color} className="flex-shrink-0">
+            <Flame size={12} className="mr-1" />
+            {strength.label}
+          </Badge>
+        </div>
+
+        {/* Ingredients */}
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {mix.ingredients?.slice(0, 3).map((ing, index) => (
+            <span
+              key={index}
+              className="text-caption-1 bg-surface-elevated text-text-secondary px-2.5 py-1 rounded-full"
+            >
+              {ing.flavor?.name || 'Вкус'} · {ing.percentage}%
+            </span>
+          ))}
+          {mix.ingredients?.length > 3 && (
+            <span className="text-caption-1 text-text-tertiary px-2 py-1">
+              +{mix.ingredients.length - 3}
+            </span>
+          )}
+        </div>
+
+        {/* Footer stats */}
+        <div className="flex items-center justify-between pt-3 border-t border-border">
+          <div className="flex items-center gap-4">
+            {/* Likes */}
+            <div className="flex items-center gap-1.5">
+              <Heart 
+                size={16} 
+                className={rating > 0 ? 'text-accent-red fill-accent-red' : 'text-text-tertiary'} 
+              />
+              <span className={`text-subheadline font-medium ${
+                rating > 0 ? 'text-accent-red' : 'text-text-tertiary'
+              }`}>
+                {rating > 0 ? `+${rating}` : rating}
+              </span>
+            </div>
+            
+            {/* Orders */}
+            <div className="flex items-center gap-1.5">
+              <ShoppingBag size={16} className="text-text-tertiary" />
+              <span className="text-subheadline text-text-tertiary">
+                {mix.ordersCount || 0}
+              </span>
+            </div>
+          </div>
+
+          {/* Author */}
+          <span className="text-caption-1 text-text-tertiary">
+            {mix.author?.firstName || 'Аноним'}
+          </span>
+        </div>
+      </div>
+    </Card>
+  );
+}

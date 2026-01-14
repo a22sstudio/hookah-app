@@ -1,455 +1,259 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus, Minus, Trash2, Check } from 'lucide-react';
-import { getFlavors, createMix } from '../api';
-import FlavorCard from '../components/FlavorCard';
-import SearchBar from '../components/SearchBar';
-import Loader from '../components/Loader';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { ArrowLeft, Plus, Trash2, Save, Check } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
+import { getBrands, getFlavors, createMix } from '../api';
+import { Button, Card, Badge } from '../components/ui';
+import { PageLoader } from '../components/Loader';
 
-const CreateMix = () => {
+export default function CreateMix() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user, hapticFeedback, showAlert } = useTelegram();
+  const { user, tg } = useTelegram();
   
-  const [step, setStep] = useState(1); // 1: выбор вкусов, 2: проценты, 3: название
-  const [flavors, setFlavors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedFlavors, setSelectedFlavors] = useState([]);
-  const [mixName, setMixName] = useState('');
-  const [mixDescription, setMixDescription] = useState('');
-  const [strength, setStrength] = useState('MEDIUM');
-  const [saving, setSaving] = useState(false);
+  // State
+  const [step, setStep] = useState(1);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [ingredients, setIngredients] = useState([]);
+  const [showFlavorSelect, setShowFlavorSelect] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState(null);
 
-  // Если пришли с FlavorDetail с выбранным вкусом
-  useEffect(() => {
-    if (location.state?.selectedFlavor) {
-      const flavor = location.state.selectedFlavor;
-      setSelectedFlavors([{ ...flavor, percentage: 100 }]);
-    }
-  }, [location.state]);
+  // Queries
+  const { data: brands } = useQuery({ 
+    queryKey: ['brands'], 
+    queryFn: getBrands 
+  });
+  
+  const { data: flavors } = useQuery({ 
+    queryKey: ['flavors', selectedBrand], 
+    queryFn: () => getFlavors({ brandId: selectedBrand }),
+    enabled: !!selectedBrand 
+  });
 
-  useEffect(() => {
-    const fetchFlavors = async () => {
-      try {
-        const params = search ? { search } : {};
-        const data = await getFlavors(params);
-        setFlavors(data);
-      } catch (error) {
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    const debounce = setTimeout(fetchFlavors, 300);
-    return () => clearTimeout(debounce);
-  }, [search]);
+  const createMutation = useMutation({
+    mutationFn: createMix,
+    onSuccess: () => {
+      tg.HapticFeedback.notificationOccurred('success');
+      navigate('/mixes');
+    },
+  });
 
-  const handleSelectFlavor = (flavor) => {
-    hapticFeedback('impact', 'light');
-    
-    const exists = selectedFlavors.find(f => f.id === flavor.id);
-    if (exists) {
-      setSelectedFlavors(selectedFlavors.filter(f => f.id !== flavor.id));
-    } else {
-      if (selectedFlavors.length >= 5) {
-        showAlert('Максимум 5 вкусов в миксе');
-        return;
-      }
-      // Распределяем проценты поровну
-      const newSelected = [...selectedFlavors, { ...flavor, percentage: 0 }];
-      const equalPercentage = Math.floor(100 / newSelected.length);
-      const remainder = 100 - (equalPercentage * newSelected.length);
-      
-      setSelectedFlavors(newSelected.map((f, i) => ({
-        ...f,
-        percentage: equalPercentage + (i === 0 ? remainder : 0)
-      })));
-    }
+  // Helpers
+  const totalPercentage = ingredients.reduce((sum, i) => sum + i.percentage, 0);
+  
+  const addIngredient = (flavor) => {
+    if (ingredients.find(i => i.flavorId === flavor.id)) return;
+    setIngredients([...ingredients, { ...flavor, flavorId: flavor.id, percentage: 20 }]);
+    setShowFlavorSelect(false);
+    setSelectedBrand(null);
   };
 
-  const updatePercentage = (flavorId, delta) => {
-    hapticFeedback('selection');
+  const removeIngredient = (index) => {
+    const newIng = [...ingredients];
+    newIng.splice(index, 1);
+    setIngredients(newIng);
+  };
+
+  const updatePercentage = (index, value) => {
+    const newIng = [...ingredients];
+    newIng[index].percentage = parseInt(value);
+    setIngredients(newIng);
+  };
+
+  const handleSubmit = () => {
+    if (!name || ingredients.length === 0) return;
     
-    setSelectedFlavors(prev => {
-      const updated = prev.map(f => {
-        if (f.id === flavorId) {
-          const newPercentage = Math.max(5, Math.min(95, f.percentage + delta));
-          return { ...f, percentage: newPercentage };
-        }
-        return f;
-      });
-      
-      // Нормализуем до 100%
-      const total = updated.reduce((sum, f) => sum + f.percentage, 0);
-      if (total !== 100) {
-        const diff = 100 - total;
-        const otherIndex = updated.findIndex(f => f.id !== flavorId);
-        if (otherIndex !== -1) {
-          updated[otherIndex].percentage += diff;
-        }
-      }
-      
-      return updated;
+    createMutation.mutate({
+      name,
+      description,
+      authorId: user?.id,
+      ingredients: ingredients.map(i => ({
+        flavorId: i.flavorId,
+        percentage: i.percentage
+      }))
     });
   };
 
-  const removeFlavor = (flavorId) => {
-    hapticFeedback('impact', 'medium');
-    const remaining = selectedFlavors.filter(f => f.id !== flavorId);
-    
-    if (remaining.length > 0) {
-      const equalPercentage = Math.floor(100 / remaining.length);
-      const remainder = 100 - (equalPercentage * remaining.length);
-      setSelectedFlavors(remaining.map((f, i) => ({
-        ...f,
-        percentage: equalPercentage + (i === 0 ? remainder : 0)
-      })));
-    } else {
-      setSelectedFlavors([]);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!user) {
-      showAlert('Откройте через Telegram');
-      return;
-    }
-    
-    if (!mixName.trim()) {
-      showAlert('Введите название микса');
-      return;
-    }
-    
-    if (selectedFlavors.length < 2) {
-      showAlert('Выберите минимум 2 вкуса');
-      return;
-    }
-    
-    const total = selectedFlavors.reduce((sum, f) => sum + f.percentage, 0);
-    if (total !== 100) {
-      showAlert('Сумма процентов должна быть 100%');
-      return;
-    }
-    
-    setSaving(true);
-    hapticFeedback('notification', 'success');
-    
-    try {
-      await createMix({
-        name: mixName.trim(),
-        description: mixDescription.trim(),
-        authorId: user.id,
-        strength,
-        ingredients: selectedFlavors.map(f => ({
-          flavorId: f.id,
-          percentage: f.percentage
-        }))
-      });
-      
-      showAlert('✅ Микс создан!');
-      navigate('/mixes');
-    } catch (error) {
-      console.error('Error:', error);
-      showAlert('Ошибка при создании микса');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const totalPercentage = selectedFlavors.reduce((sum, f) => sum + f.percentage, 0);
-
-  return (
-    <div className="min-h-screen pb-32">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-hookah-dark/95 backdrop-blur-lg border-b border-white/5">
-        <div className="flex items-center gap-4 px-4 py-4">
-          <button
-            onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)}
-            className="p-2 hover:bg-white/5 rounded-xl transition-colors"
-          >
-            <ArrowLeft size={24} className="text-white" />
+  // --- Step 1: Ingredients ---
+  if (step === 1) {
+    return (
+      <div className="pb-24 animate-fade-in px-4 py-4 min-h-screen flex flex-col">
+        <div className="flex items-center gap-4 mb-6">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-text-secondary">
+            <ArrowLeft size={24} />
           </button>
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold text-white">Создать микс</h1>
-            <p className="text-sm text-gray-400">Шаг {step} из 3</p>
-          </div>
+          <h1 className="font-heading text-title-2">Создание микса</h1>
         </div>
-        
-        {/* Progress */}
-        <div className="flex gap-1 px-4 pb-4">
-          {[1, 2, 3].map(s => (
-            <div
-              key={s}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                s <= step ? 'bg-hookah-primary' : 'bg-white/10'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
 
-      {/* Step 1: Select Flavors */}
-      {step === 1 && (
-        <div className="px-4 py-6">
-          <h2 className="text-xl font-bold text-white mb-2">Выберите вкусы</h2>
-          <p className="text-gray-400 mb-4">От 2 до 5 вкусов</p>
-          
-          {/* Selected */}
-          {selectedFlavors.length > 0 && (
-            <div className="mb-4 p-4 bg-hookah-card rounded-2xl border border-hookah-primary/30">
-              <p className="text-sm text-gray-400 mb-2">
-                Выбрано: {selectedFlavors.length}/5
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {selectedFlavors.map(f => (
-                  <span
-                    key={f.id}
-                    className="px-3 py-1.5 bg-hookah-primary/20 text-hookah-primary 
-                               rounded-full text-sm font-medium"
-                  >
-                    {f.name}
-                  </span>
-                ))}
-              </div>
+        {/* Ingredients List */}
+        <div className="flex-1">
+          {ingredients.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-border rounded-ios-xl">
+              <p className="text-text-secondary mb-4">Микс пока пуст</p>
+              <Button onClick={() => setShowFlavorSelect(true)} variant="secondary" icon={Plus}>
+                Добавить вкус
+              </Button>
             </div>
-          )}
-          
-          {/* Search */}
-          <div className="mb-4">
-            <SearchBar
-              value={search}
-              onChange={setSearch}
-              placeholder="Поиск вкуса..."
-            />
-          </div>
-          
-          {/* Flavors List */}
-          {loading ? (
-            <Loader />
           ) : (
-            <div className="space-y-3">
-              {flavors.map(flavor => (
-                <FlavorCard
-                  key={flavor.id}
-                  flavor={flavor}
-                  selectable
-                  selected={selectedFlavors.some(f => f.id === flavor.id)}
-                  onSelect={handleSelectFlavor}
-                />
+            <div className="space-y-4">
+              {ingredients.map((ing, idx) => (
+                <Card key={idx} className="relative">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-semibold">{ing.name}</h4>
+                      <p className="text-caption-1 text-text-secondary">{ing.brand?.name}</p>
+                    </div>
+                    <button 
+                      onClick={() => removeIngredient(idx)}
+                      className="text-text-tertiary p-1"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  
+                  {/* Slider */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      value={ing.percentage}
+                      onChange={(e) => updatePercentage(idx, e.target.value)}
+                      className="flex-1 h-2 bg-surface-elevated rounded-lg appearance-none cursor-pointer accent-accent-green"
+                    />
+                    <span className="w-12 text-right font-mono font-medium">{ing.percentage}%</span>
+                  </div>
+                </Card>
               ))}
+
+              <Button 
+                onClick={() => setShowFlavorSelect(true)} 
+                variant="ghost" 
+                fullWidth 
+                icon={Plus}
+                className="border border-dashed border-border py-4"
+              >
+                Добавить еще
+              </Button>
+
+              {/* Total Check */}
+              <div className={`flex justify-between items-center p-4 rounded-ios-xl ${
+                totalPercentage === 100 ? 'bg-accent-green/10 text-accent-green' : 'bg-surface-elevated text-text-secondary'
+              }`}>
+                <span className="font-medium">Всего:</span>
+                <span className={`font-bold ${totalPercentage !== 100 ? 'text-accent-red' : ''}`}>
+                  {totalPercentage}%
+                </span>
+              </div>
             </div>
           )}
         </div>
-      )}
 
-      {/* Step 2: Adjust Percentages */}
-      {step === 2 && (
-        <div className="px-4 py-6">
-          <h2 className="text-xl font-bold text-white mb-2">Настройте пропорции</h2>
-          <p className="text-gray-400 mb-6">Общая сумма должна быть 100%</p>
-          
-          {/* Total indicator */}
-          <div className={`mb-6 p-4 rounded-2xl border ${
-            totalPercentage === 100 
-              ? 'bg-green-500/10 border-green-500/30' 
-              : 'bg-yellow-500/10 border-yellow-500/30'
-          }`}>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300">Итого:</span>
-              <span className={`text-2xl font-bold ${
-                totalPercentage === 100 ? 'text-green-500' : 'text-yellow-500'
-              }`}>
-                {totalPercentage}%
-              </span>
+        <Button 
+          className="mt-6" 
+          disabled={ingredients.length === 0 || totalPercentage !== 100}
+          onClick={() => setStep(2)}
+        >
+          Далее
+        </Button>
+
+        {/* Modal for Selecting Flavors */}
+        {showFlavorSelect && (
+          <div className="fixed inset-0 z-50 bg-dark/95 backdrop-blur-sm p-4 flex flex-col animate-scale-in">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-title-3 font-bold">
+                {selectedBrand ? 'Выберите вкус' : 'Выберите бренд'}
+              </h2>
+              <button onClick={() => setShowFlavorSelect(false)} className="text-text-secondary">Закрыть</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {!selectedBrand ? (
+                brands?.map(brand => (
+                  <Card 
+                    key={brand.id} 
+                    onClick={() => setSelectedBrand(brand.id)}
+                    className="flex justify-between items-center p-4 cursor-pointer hover:bg-surface-elevated"
+                  >
+                    <span>{brand.name}</span>
+                    <ArrowLeft size={16} className="rotate-180 text-text-tertiary" />
+                  </Card>
+                ))
+              ) : (
+                <>
+                  <button 
+                    onClick={() => setSelectedBrand(null)} 
+                    className="mb-4 text-accent-green text-subheadline flex items-center gap-1"
+                  >
+                    <ArrowLeft size={16} /> Назад к брендам
+                  </button>
+                  {flavors?.map(flavor => (
+                    <Card 
+                      key={flavor.id} 
+                      onClick={() => addIngredient(flavor)}
+                      className="p-4 cursor-pointer hover:bg-surface-elevated"
+                    >
+                      <h4 className="font-medium">{flavor.name}</h4>
+                      <div className="flex gap-2 mt-1">
+                        {flavor.flavorProfile?.slice(0, 3).map(tag => (
+                          <span key={tag} className="text-caption-2 bg-surface-elevated px-2 py-0.5 rounded-full text-text-secondary">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </>
+              )}
             </div>
           </div>
-          
-          {/* Ingredients */}
-          <div className="space-y-4">
-            {selectedFlavors.map(flavor => (
-              <div
-                key={flavor.id}
-                className="p-4 bg-hookah-card rounded-2xl border border-white/5"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="font-medium text-white">{flavor.name}</p>
-                    <p className="text-sm text-gray-400">{flavor.brand?.name}</p>
-                  </div>
-                  <button
-                    onClick={() => removeFlavor(flavor.id)}
-                    className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => updatePercentage(flavor.id, -5)}
-                    className="p-2 bg-hookah-dark rounded-lg hover:bg-white/10 transition-colors"
-                  >
-                    <Minus size={20} className="text-gray-300" />
-                  </button>
-                  
-                  <div className="flex-1 text-center">
-                    <span className="text-3xl font-bold text-hookah-primary">
-                      {flavor.percentage}%
-                    </span>
-                  </div>
-                  
-                  <button
-                    onClick={() => updatePercentage(flavor.id, 5)}
-                    className="p-2 bg-hookah-dark rounded-lg hover:bg-white/10 transition-colors"
-                  >
-                    <Plus size={20} className="text-gray-300" />
-                  </button>
-                </div>
-                
-                {/* Progress bar */}
-                <div className="mt-3 h-2 bg-hookah-dark rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-hookah-primary to-hookah-secondary transition-all"
-                    style={{ width: `${flavor.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Name & Save */}
-      {step === 3 && (
-        <div className="px-4 py-6">
-          <h2 className="text-xl font-bold text-white mb-6">Завершите создание</h2>
-          
-          {/* Name */}
-          <div className="mb-4">
-            <label className="text-sm text-gray-400 mb-2 block">Название микса *</label>
-            <input
-              type="text"
-              value={mixName}
-              onChange={(e) => setMixName(e.target.value)}
-              placeholder="Например: Летний бриз"
-              className="w-full p-4 bg-hookah-card border border-white/10 rounded-xl 
-                         text-white placeholder-gray-500 focus:outline-none focus:border-hookah-primary/50"
-            />
-          </div>
-          
-          {/* Description */}
-          <div className="mb-4">
-            <label className="text-sm text-gray-400 mb-2 block">Описание</label>
-            <textarea
-              value={mixDescription}
-              onChange={(e) => setMixDescription(e.target.value)}
-              placeholder="Расскажите о вкусе..."
-              rows={3}
-              className="w-full p-4 bg-hookah-card border border-white/10 rounded-xl 
-                         text-white placeholder-gray-500 focus:outline-none focus:border-hookah-primary/50
-                         resize-none"
-            />
-          </div>
-          
-          {/* Strength */}
-          <div className="mb-6">
-            <label className="text-sm text-gray-400 mb-2 block">Крепость</label>
-            <div className="flex gap-2">
-              {[
-                { value: 'LIGHT', label: '🌱 Лёгкий' },
-                { value: 'MEDIUM', label: '🌿 Средний' },
-                { value: 'STRONG', label: '🔥 Крепкий' },
-              ].map(option => (
-                <button
-                  key={option.value}
-                  onClick={() => setStrength(option.value)}
-                  className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${
-                    strength === option.value
-                      ? 'bg-hookah-primary text-white'
-                      : 'bg-hookah-card text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          {/* Summary */}
-          <div className="p-4 bg-hookah-card rounded-2xl border border-white/5 mb-6">
-            <h3 className="font-medium text-white mb-3">Состав микса:</h3>
-            <div className="space-y-2">
-              {selectedFlavors.map(f => (
-                <div key={f.id} className="flex justify-between text-sm">
-                  <span className="text-gray-300">{f.name}</span>
-                  <span className="text-hookah-primary font-medium">{f.percentage}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bottom Actions */}
-      <div className="fixed bottom-20 left-0 right-0 p-4 bg-hookah-dark/95 backdrop-blur-lg border-t border-white/5">
-        {step === 1 && (
-          <button
-            onClick={() => setStep(2)}
-            disabled={selectedFlavors.length < 2}
-            className={`w-full py-4 rounded-2xl font-semibold transition-all flex items-center justify-center gap-2
-              ${selectedFlavors.length >= 2
-                ? 'bg-gradient-to-r from-hookah-primary to-hookah-secondary text-white'
-                : 'bg-hookah-card text-gray-500 cursor-not-allowed'
-              }`}
-          >
-            Далее
-            <span className="text-sm opacity-75">({selectedFlavors.length}/5 выбрано)</span>
-          </button>
-        )}
-        
-        {step === 2 && (
-          <button
-            onClick={() => setStep(3)}
-            disabled={totalPercentage !== 100}
-            className={`w-full py-4 rounded-2xl font-semibold transition-all
-              ${totalPercentage === 100
-                ? 'bg-gradient-to-r from-hookah-primary to-hookah-secondary text-white'
-                : 'bg-hookah-card text-gray-500 cursor-not-allowed'
-              }`}
-          >
-            {totalPercentage === 100 ? 'Далее' : `Сумма: ${totalPercentage}% (нужно 100%)`}
-          </button>
-        )}
-        
-        {step === 3 && (
-          <button
-            onClick={handleSave}
-            disabled={saving || !mixName.trim()}
-            className={`w-full py-4 rounded-2xl font-semibold transition-all flex items-center justify-center gap-2
-              ${!saving && mixName.trim()
-                ? 'bg-gradient-to-r from-hookah-primary to-hookah-secondary text-white'
-                : 'bg-hookah-card text-gray-500 cursor-not-allowed'
-              }`}
-          >
-            {saving ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Сохранение...
-              </>
-            ) : (
-              <>
-                <Check size={20} />
-                Создать микс
-              </>
-            )}
-          </button>
         )}
       </div>
+    );
+  }
+
+  // --- Step 2: Info ---
+  return (
+    <div className="pb-24 animate-fade-in px-4 py-4 min-h-screen flex flex-col">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => setStep(1)} className="p-2 -ml-2 text-text-secondary">
+          <ArrowLeft size={24} />
+        </button>
+        <h1 className="font-heading text-title-2">Описание</h1>
+      </div>
+
+      <div className="space-y-6 flex-1">
+        <div>
+          <label className="block text-subheadline text-text-secondary mb-2">Название микса</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Например: Летний бриз"
+            className="w-full bg-surface-solid border border-border rounded-ios-xl p-4 text-body text-text-primary focus:border-accent-green focus:outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-subheadline text-text-secondary mb-2">Описание (опционально)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Расскажите, какой это микс..."
+            rows={4}
+            className="w-full bg-surface-solid border border-border rounded-ios-xl p-4 text-body text-text-primary focus:border-accent-green focus:outline-none resize-none"
+          />
+        </div>
+      </div>
+
+      <Button 
+        onClick={handleSubmit} 
+        icon={Save}
+        disabled={!name || createMutation.isPending}
+      >
+        {createMutation.isPending ? 'Создание...' : 'Сохранить микс'}
+      </Button>
     </div>
   );
-};
-
-export default CreateMix;
+}

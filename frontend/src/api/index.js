@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// ===== Brands =====
+// Brands
 export const getBrands = async () => {
   const { data } = await api.get('/api/brands');
   return data;
@@ -20,7 +20,7 @@ export const getBrandBySlug = async (slug) => {
   return data;
 };
 
-// ===== Flavors =====
+// Flavors
 export const getFlavors = async (params = {}) => {
   const { data } = await api.get('/api/flavors', { params });
   return data;
@@ -31,7 +31,7 @@ export const getFlavorById = async (id) => {
   return data;
 };
 
-// ===== Mixes =====
+// Mixes
 export const getMixes = async (params = {}) => {
   const { data } = await api.get('/api/mixes', { params });
   return data;
@@ -52,19 +52,18 @@ export const mixAction = async (mixId, actionData) => {
   return data;
 };
 
-// ===== Tags =====
+// Tags
 export const getTags = async () => {
   const { data } = await api.get('/api/tags');
   return data;
 };
 
-// ===== User =====
+// Users
 export const getUser = async (telegramId) => {
   const { data } = await api.get(`/api/users/${telegramId}`);
   return data;
 };
 
-// ВОТ ЭТА ФУНКЦИЯ ОТСУТСТВОВАЛА!
 export const getUserActions = async (telegramId) => {
   const { data } = await api.get(`/api/users/${telegramId}/actions`);
   return data;

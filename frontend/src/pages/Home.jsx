@@ -1,126 +1,134 @@
-import { useEffect, useState } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search, Sparkles, TrendingUp, Leaf } from 'lucide-react';
+import { ChevronRight, Sparkles, TrendingUp, Flame } from 'lucide-react';
 import { getBrands, getMixes } from '../api';
+import { Card, Button, Badge } from '../components/ui';
 import BrandCard from '../components/BrandCard';
 import MixCard from '../components/MixCard';
-import Loader from '../components/Loader';
-import { useTelegram } from '../hooks/useTelegram';
+import { PageLoader } from '../components/Loader';
 
-const Home = () => {
+export default function Home() {
   const navigate = useNavigate();
-  const { user, hapticFeedback } = useTelegram();
-  const [brands, setBrands] = useState([]);
-  const [popularMixes, setPopularMixes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  
+  const { data: brands, isLoading: brandsLoading } = useQuery({
+    queryKey: ['brands'],
+    queryFn: getBrands,
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [brandsData, mixesData] = await Promise.all([
-          getBrands(),
-          getMixes({ sort: 'popular' }),
-        ]);
-        setBrands(brandsData.slice(0, 4));
-        setPopularMixes(mixesData.slice(0, 3));
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data: mixes, isLoading: mixesLoading } = useQuery({
+    queryKey: ['mixes', 'popular'],
+    queryFn: () => getMixes({ sort: 'popular' }),
+  });
 
-  const handleNavigate = (path) => {
-    hapticFeedback('impact', 'light');
-    navigate(path);
-  };
+  if (brandsLoading || mixesLoading) {
+    return <PageLoader />;
+  }
 
-  if (loading) return <Loader />;
+  const popularMixes = mixes?.slice(0, 3) || [];
 
   return (
-    <div className="px-4 py-6">
+    <div className="px-4 py-6 animate-fade-in">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white mb-2">
-          Привет, {user?.first_name || 'Гость'}! 👋
+      <header className="mb-8">
+        <h1 className="font-heading text-display text-text-primary mb-2">
+          Кальянная
         </h1>
-        <p className="text-gray-400">
-          Выбери вкус или создай свой микс
+        <p className="text-body text-text-secondary">
+          Выбери идеальный микс для себя
         </p>
-      </div>
+      </header>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
-        <button
-          onClick={() => handleNavigate('/flavors')}
-          className="p-4 bg-gradient-to-br from-hookah-primary/20 to-hookah-primary/5 
-                     rounded-2xl border border-hookah-primary/20 text-left
-                     hover:border-hookah-primary/40 transition-all"
-        >
-          <Search className="text-hookah-primary mb-2" size={24} />
-          <h3 className="font-semibold text-white">Все вкусы</h3>
-          <p className="text-xs text-gray-400 mt-1">Каталог табаков</p>
-        </button>
-
-        <button
-          onClick={() => handleNavigate('/create-mix')}
-          className="p-4 bg-gradient-to-br from-hookah-secondary/20 to-hookah-secondary/5 
-                     rounded-2xl border border-hookah-secondary/20 text-left
-                     hover:border-hookah-secondary/40 transition-all"
-        >
-          <Sparkles className="text-hookah-secondary mb-2" size={24} />
-          <h3 className="font-semibold text-white">Создать микс</h3>
-          <p className="text-xs text-gray-400 mt-1">Свой рецепт</p>
-        </button>
-      </div>
-
-      {/* Brands Section */}
       <section className="mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Leaf size={20} className="text-hookah-primary" />
-            Бренды
-          </h2>
-          <button
-            onClick={() => handleNavigate('/flavors')}
-            className="text-sm text-hookah-primary"
+        <div className="grid grid-cols-2 gap-3">
+          <Card
+            variant="elevated"
+            padding="default"
+            onClick={() => navigate('/mixes/create')}
+            className="relative overflow-hidden"
           >
-            Все →
-          </button>
-        </div>
-        <div className="space-y-3">
-          {brands.map((brand) => (
-            <BrandCard key={brand.id} brand={brand} />
-          ))}
+            <div className="absolute top-0 right-0 w-20 h-20 bg-accent-green/10 rounded-full blur-2xl" />
+            <div className="relative">
+              <div className="w-10 h-10 rounded-ios-lg bg-accent-green/15 flex items-center justify-center mb-3">
+                <Sparkles size={20} className="text-accent-green" />
+              </div>
+              <h3 className="font-heading font-semibold text-headline text-text-primary">
+                Создать микс
+              </h3>
+              <p className="text-caption-1 text-text-secondary mt-1">
+                Собери свой вкус
+              </p>
+            </div>
+          </Card>
+
+          <Card
+            variant="elevated"
+            padding="default"
+            onClick={() => navigate('/mixes?sort=popular')}
+            className="relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-20 h-20 bg-accent-orange/10 rounded-full blur-2xl" />
+            <div className="relative">
+              <div className="w-10 h-10 rounded-ios-lg bg-accent-orange/15 flex items-center justify-center mb-3">
+                <TrendingUp size={20} className="text-accent-orange" />
+              </div>
+              <h3 className="font-heading font-semibold text-headline text-text-primary">
+                Популярное
+              </h3>
+              <p className="text-caption-1 text-text-secondary mt-1">
+                Топ миксов
+              </p>
+            </div>
+          </Card>
         </div>
       </section>
 
       {/* Popular Mixes */}
       {popularMixes.length > 0 && (
         <section className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <TrendingUp size={20} className="text-hookah-accent" />
-              Популярные миксы
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-heading font-bold text-title-3 text-text-primary">
+              🔥 Популярные миксы
             </h2>
-            <button
-              onClick={() => handleNavigate('/mixes')}
-              className="text-sm text-hookah-primary"
+            <button 
+              onClick={() => navigate('/mixes')}
+              className="flex items-center gap-1 text-accent-green text-subheadline font-medium press-effect"
             >
-              Все →
+              Все
+              <ChevronRight size={16} />
             </button>
           </div>
-          <div className="space-y-3">
+          
+          <div className="flex flex-col gap-3">
             {popularMixes.map((mix) => (
               <MixCard key={mix.id} mix={mix} />
             ))}
           </div>
         </section>
       )}
+
+      {/* Brands */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-heading font-bold text-title-3 text-text-primary">
+            🏷️ Бренды
+          </h2>
+          <button 
+            onClick={() => navigate('/flavors')}
+            className="flex items-center gap-1 text-accent-green text-subheadline font-medium press-effect"
+          >
+            Все вкусы
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        
+        <div className="flex flex-col gap-3">
+          {brands?.map((brand) => (
+            <BrandCard key={brand.id} brand={brand} />
+          ))}
+        </div>
+      </section>
     </div>
   );
-};
-
-export default Home;
+}

@@ -1,46 +1,161 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-/* Базовые стили для Telegram WebApp */
-:root {
-  --tg-theme-bg-color: #1a1a1a;
-  --tg-theme-text-color: #ffffff;
-  --tg-theme-hint-color: #999999;
-  --tg-theme-link-color: #64B5F6;
-  --tg-theme-button-color: #50a8eb;
-  --tg-theme-button-text-color: #ffffff;
-  --tg-theme-secondary-bg-color: #2a2a2a;
-}
+/* ===== iOS 26 Style Base ===== */
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #111827;
-  color: #ffffff;
+  background-color: #0D0D0F;
+  color: #FFFFFF;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
+  overscroll-behavior: none;
 }
 
-/* Красивый скроллбар */
+/* Safe area insets for iOS */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ===== Scrollbar (Hidden but functional) ===== */
+
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 0;
+  height: 0;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+/* ===== iOS Glass Effect ===== */
+
+.glass {
+  background: rgba(28, 28, 30, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
+.glass-solid {
+  background: rgba(28, 28, 30, 0.95);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #4B5563;
+/* ===== Typography Helpers ===== */
+
+.font-heading {
+  font-family: 'Manrope', system-ui, sans-serif;
+}
+
+.font-body {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ===== iOS Button Press Effect ===== */
+
+.press-effect {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.press-effect:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+/* ===== iOS Card Styles ===== */
+
+.card-ios {
+  @apply bg-surface-solid rounded-ios-xl border border-border;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-ios:active {
+  transform: scale(0.98);
+}
+
+/* ===== Gradient Backgrounds ===== */
+
+.gradient-accent {
+  background: linear-gradient(135deg, #34C759 0%, #30D158 100%);
+}
+
+.gradient-surface {
+  background: linear-gradient(180deg, rgba(44, 44, 46, 0.8) 0%, rgba(28, 28, 30, 0.9) 100%);
+}
+
+/* ===== Status Badge Colors ===== */
+
+.badge-light {
+  @apply bg-accent-green/20 text-accent-green;
+}
+
+.badge-medium {
+  @apply bg-accent-orange/20 text-accent-orange;
+}
+
+.badge-strong {
+  @apply bg-accent-red/20 text-accent-red;
+}
+
+/* ===== Input Focus States ===== */
+
+input:focus, textarea:focus {
+  outline: none;
+}
+
+/* ===== Selection ===== */
+
+::selection {
+  background: rgba(52, 199, 89, 0.3);
+  color: #FFFFFF;
+}
+
+/* ===== Page Transitions ===== */
+
+.page-enter {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+/* ===== Shimmer Loading Effect ===== */
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== Floating Elements ===== */
+
+.float-shadow {
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
 }

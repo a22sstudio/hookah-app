@@ -1,176 +1,227 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { getFlavors, getBrands, getTags } from '../api';
 import FlavorCard from '../components/FlavorCard';
-import SearchBar from '../components/SearchBar';
-import TagFilter from '../components/TagFilter';
-import Loader from '../components/Loader';
-import { ChevronDown } from 'lucide-react';
+import { PageLoader } from '../components/Loader';
+import { Badge } from '../components/ui';
 
-const Flavors = () => {
+const tagLabels = {
+  SWEET: 'Сладкий',
+  SOUR: 'Кислый',
+  FRESH: 'Свежий',
+  FRUITY: 'Фруктовый',
+  BERRY: 'Ягодный',
+  CITRUS: 'Цитрус',
+  MINT: 'Мята',
+  ICE: 'Лёд',
+  TROPICAL: 'Тропик',
+  CREAMY: 'Сливочный',
+  DESSERT: 'Десерт',
+  SPICY: 'Пряный',
+};
+
+export default function Flavors() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [flavors, setFlavors] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [tags, setTags] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState(searchParams.get('brandId') || '');
-  const [selectedTags, setSelectedTags] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  
+  const brandFilter = searchParams.get('brand') || '';
+  const tagFilter = searchParams.get('tag') || '';
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const [brandsData, tagsData] = await Promise.all([
-          getBrands(),
-          getTags(),
-        ]);
-        setBrands(brandsData);
-        setTags(tagsData);
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    };
-    fetchInitialData();
-  }, []);
+  const { data: flavors, isLoading: flavorsLoading } = useQuery({
+    queryKey: ['flavors'],
+    queryFn: () => getFlavors(),
+  });
 
-  useEffect(() => {
-    const fetchFlavors = async () => {
-      setLoading(true);
-      try {
-        const params = {};
-        if (selectedBrand) params.brandId = selectedBrand;
-        if (selectedTags.length === 1) params.tag = selectedTags[0];
-        if (search) params.search = search;
-        
-        const data = await getFlavors(params);
-        
-        // Фильтрация по нескольким тегам на клиенте
-        let filtered = data;
-        if (selectedTags.length > 1) {
-          filtered = data.filter(flavor =>
-            selectedTags.every(tag => flavor.flavorProfile?.includes(tag))
-          );
-        }
-        
-        setFlavors(filtered);
-      } catch (error) {
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data: brands } = useQuery({
+    queryKey: ['brands'],
+    queryFn: getBrands,
+  });
+
+  // Filter flavors
+  const filteredFlavors = useMemo(() => {
+    if (!flavors) return [];
     
-    const debounce = setTimeout(fetchFlavors, 300);
-    return () => clearTimeout(debounce);
-  }, [selectedBrand, selectedTags, search]);
+    return flavors.filter((flavor) => {
+      // Search filter
+      if (search) {
+        const searchLower = search.toLowerCase();
+        const matchesName = flavor.name.toLowerCase().includes(searchLower);
+        const matchesBrand = flavor.brand?.name.toLowerCase().includes(searchLower);
+        if (!matchesName && !matchesBrand) return false;
+      }
+      
+      // Brand filter
+      if (brandFilter && flavor.brand?.slug !== brandFilter) {
+        return false;
+      }
+      
+      // Tag filter
+      if (tagFilter && !flavor.flavorProfile?.includes(tagFilter)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [flavors, search, brandFilter, tagFilter]);
+
+  const clearFilters = () => {
+    setSearch('');
+    setSearchParams({});
+  };
+
+  const hasFilters = search || brandFilter || tagFilter;
+
+  if (flavorsLoading) {
+    return <PageLoader />;
+  }
 
   return (
-    <div className="px-4 py-6">
+    <div className="px-4 py-6 animate-fade-in">
       {/* Header */}
-      <h1 className="text-2xl font-bold text-white mb-6">🌿 Вкусы</h1>
+      <header className="mb-6">
+        <h1 className="font-heading text-title-1 text-text-primary mb-1">
+          Вкусы
+        </h1>
+        <p className="text-subheadline text-text-secondary">
+          {filteredFlavors.length} вкусов
+        </p>
+      </header>
 
       {/* Search */}
-      <div className="mb-4">
-        <SearchBar
+      <div className="relative mb-4">
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-tertiary" />
+        <input
+          type="text"
           value={search}
-          onChange={setSearch}
-          placeholder="Поиск вкуса..."
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск вкусов..."
+          className="w-full bg-surface-solid border border-border rounded-ios-xl py-3 pl-11 pr-4 text-body text-text-primary placeholder:text-text-tertiary focus:border-accent-green/50 transition-colors"
         />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary press-effect"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
-      {/* Filter Toggle */}
-      <button
-        onClick={() => setShowFilters(!showFilters)}
-        className="flex items-center gap-2 text-gray-400 mb-4"
-      >
-        <span>Фильтры</span>
-        <ChevronDown
-          size={20}
-          className={`transition-transform ${showFilters ? 'rotate-180' : ''}`}
-        />
-        {(selectedBrand || selectedTags.length > 0) && (
-          <span className="w-5 h-5 bg-hookah-primary rounded-full text-xs text-white flex items-center justify-center">
-            {(selectedBrand ? 1 : 0) + selectedTags.length}
-          </span>
+      {/* Filter Toggles */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-subheadline font-medium transition-colors press-effect flex-shrink-0 ${
+            showFilters 
+              ? 'bg-accent-green text-white' 
+              : 'bg-surface-solid border border-border text-text-secondary'
+          }`}
+        >
+          <SlidersHorizontal size={16} />
+          Фильтры
+        </button>
+        
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-1 px-4 py-2 rounded-full bg-accent-red/15 text-accent-red text-subheadline font-medium press-effect flex-shrink-0"
+          >
+            <X size={14} />
+            Сбросить
+          </button>
         )}
-      </button>
+      </div>
 
-      {/* Filters */}
+      {/* Expanded Filters */}
       {showFilters && (
-        <div className="space-y-4 mb-6 p-4 bg-hookah-card rounded-2xl border border-white/5">
-          {/* Brand Select */}
-          <div>
-            <label className="text-sm text-gray-400 mb-2 block">Бренд</label>
-            <select
-              value={selectedBrand}
-              onChange={(e) => {
-                setSelectedBrand(e.target.value);
-                setSearchParams(e.target.value ? { brandId: e.target.value } : {});
-              }}
-              className="w-full p-3 bg-hookah-dark border border-white/10 rounded-xl 
-                         text-white focus:outline-none focus:border-hookah-primary/50"
-            >
-              <option value="">Все бренды</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
+        <div className="mb-6 p-4 bg-surface-solid rounded-ios-xl border border-border animate-fade-in">
+          {/* Brands */}
+          <div className="mb-4">
+            <p className="text-caption-1 text-text-secondary mb-2 font-medium">Бренд</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSearchParams(prev => { prev.delete('brand'); return prev; })}
+                className={`px-3 py-1.5 rounded-full text-caption-1 font-medium transition-colors press-effect ${
+                  !brandFilter 
+                    ? 'bg-accent-green text-white' 
+                    : 'bg-surface-elevated text-text-secondary'
+                }`}
+              >
+                Все
+              </button>
+              {brands?.map((brand) => (
+                <button
+                  key={brand.id}
+                  onClick={() => setSearchParams(prev => { prev.set('brand', brand.slug); return prev; })}
+                  className={`px-3 py-1.5 rounded-full text-caption-1 font-medium transition-colors press-effect ${
+                    brandFilter === brand.slug 
+                      ? 'bg-accent-green text-white' 
+                      : 'bg-surface-elevated text-text-secondary'
+                  }`}
+                >
                   {brand.name}
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
 
           {/* Tags */}
           <div>
-            <label className="text-sm text-gray-400 mb-2 block">Вкусовой профиль</label>
-            <TagFilter
-              tags={tags}
-              selected={selectedTags}
-              onChange={setSelectedTags}
-              multiple={true}
-            />
+            <p className="text-caption-1 text-text-secondary mb-2 font-medium">Вкус</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSearchParams(prev => { prev.delete('tag'); return prev; })}
+                className={`px-3 py-1.5 rounded-full text-caption-1 font-medium transition-colors press-effect ${
+                  !tagFilter 
+                    ? 'bg-accent-green text-white' 
+                    : 'bg-surface-elevated text-text-secondary'
+                }`}
+              >
+                Все
+              </button>
+              {Object.entries(tagLabels).map(([tag, label]) => (
+                <button
+                  key={tag}
+                  onClick={() => setSearchParams(prev => { prev.set('tag', tag); return prev; })}
+                  className={`px-3 py-1.5 rounded-full text-caption-1 font-medium transition-colors press-effect ${
+                    tagFilter === tag 
+                      ? 'bg-accent-green text-white' 
+                      : 'bg-surface-elevated text-text-secondary'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+        </div>
+      )}
 
-          {/* Clear */}
-          {(selectedBrand || selectedTags.length > 0) && (
+      {/* Flavors List */}
+      {filteredFlavors.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          {filteredFlavors.map((flavor) => (
+            <FlavorCard key={flavor.id} flavor={flavor} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-text-secondary text-body mb-4">
+            Вкусы не найдены
+          </p>
+          {hasFilters && (
             <button
-              onClick={() => {
-                setSelectedBrand('');
-                setSelectedTags([]);
-                setSearchParams({});
-              }}
-              className="text-sm text-red-400 hover:text-red-300"
+              onClick={clearFilters}
+              className="text-accent-green text-subheadline font-medium press-effect"
             >
               Сбросить фильтры
             </button>
           )}
         </div>
       )}
-
-      {/* Results */}
-      {loading ? (
-        <Loader />
-      ) : flavors.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-400">Ничего не найдено</p>
-          <p className="text-sm text-gray-500 mt-2">
-            Попробуйте изменить фильтры
-          </p>
-        </div>
-      ) : (
-        <>
-          <p className="text-sm text-gray-400 mb-4">
-            Найдено: {flavors.length}
-          </p>
-          <div className="grid gap-3">
-            {flavors.map((flavor) => (
-              <FlavorCard key={flavor.id} flavor={flavor} />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
-};
-
-export default Flavors;
+}

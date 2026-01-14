@@ -1,17 +1,17 @@
+import React from 'react';
+import { Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
 
-const Layout = ({ children }) => {
+export default function Layout() {
   return (
-    <div className="min-h-screen bg-hookah-dark">
-      {/* Основной контент */}
-      <main className="pb-20">
-        {children}
+    <div className="min-h-screen bg-dark flex flex-col">
+      {/* Main Content */}
+      <main className="flex-1 pb-24 safe-top">
+        <Outlet />
       </main>
       
-      {/* Навигация */}
+      {/* Bottom Navigation */}
       <Navbar />
     </div>
   );
-};
-
-export default Layout;
+}
