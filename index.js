@@ -1,4 +1,4 @@
-// index.js
+// index.js - Полная версия с Webhook
 
 require('dotenv').config();
 
@@ -14,6 +14,7 @@ console.log('   BOT_TOKEN exists:', !!process.env.BOT_TOKEN);
 console.log('   BOT_TOKEN length:', process.env.BOT_TOKEN?.length || 0);
 console.log('   DATABASE_URL exists:', !!process.env.DATABASE_URL);
 console.log('   PORT:', process.env.PORT || 3000);
+console.log('   RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL || 'not set');
 
 if (!process.env.BOT_TOKEN) {
   console.error('❌ BOT_TOKEN is missing in .env file!');
@@ -26,73 +27,103 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
-// Telegram Bot с защитой от конфликтов
-console.log('🤖 Initializing Telegram bot...');
+// Определяем режим работы (production если есть RENDER_EXTERNAL_URL)
+const isProduction = !!(process.env.RENDER_EXTERNAL_URL || process.env.NODE_ENV === 'production');
+const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL || process.env.WEBAPP_URL;
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  polling: {
-    interval: 1000,
-    autoStart: false,
-    params: {
-      timeout: 10
-    }
-  }
-});
+console.log('🌍 Environment:', isProduction ? 'PRODUCTION (webhook)' : 'DEVELOPMENT (polling)');
 
-// Задержка перед стартом polling (даём время старому процессу умереть)
-setTimeout(() => {
-  console.log('🔄 Starting bot polling...');
-  bot.startPolling();
-}, 3000);
+// ==================== TELEGRAM BOT ====================
 
-// Обработка ошибок polling
-bot.on('polling_error', (error) => {
-  if (error.code === 'ETELEGRAM' && error.message.includes('409')) {
-    console.log('⚠️ Conflict detected, restarting polling in 5 seconds...');
-    bot.stopPolling();
-    setTimeout(() => {
-      bot.startPolling();
-    }, 5000);
-  } else {
-    console.error('❌ Polling error:', error.code, error.message);
-  }
-});
+let bot;
 
-// Проверка подключения бота
-bot.getMe().then((botInfo) => {
-  console.log('✅ Bot connected successfully!');
-  console.log(`   Bot username: @${botInfo.username}`);
-  console.log(`   Bot name: ${botInfo.first_name}`);
-}).catch((error) => {
-  console.error('❌ Bot connection failed:', error.message);
-});
-
-// Логируем ВСЕ входящие сообщения (для отладки)
-bot.on('message', (msg) => {
-  console.log('📨 Received message:', {
-    chatId: msg.chat.id,
-    text: msg.text,
-    from: msg.from.username || msg.from.first_name,
+if (isProduction && WEBHOOK_URL) {
+  // ===== PRODUCTION: Webhook режим =====
+  console.log('🤖 Starting bot in WEBHOOK mode...');
+  
+  // Создаём бота БЕЗ polling
+  bot = new TelegramBot(process.env.BOT_TOKEN, { webHook: true });
+  
+  // Путь для webhook (секретный, содержит токен)
+  const webhookPath = `/bot${process.env.BOT_TOKEN}`;
+  
+  // Устанавливаем webhook
+  bot.setWebHook(`${WEBHOOK_URL}${webhookPath}`)
+    .then(() => {
+      console.log(`✅ Webhook set successfully!`);
+      console.log(`   URL: ${WEBHOOK_URL}/bot***`);
+    })
+    .catch((err) => {
+      console.error('❌ Failed to set webhook:', err.message);
+    });
+  
+  // Middleware для парсинга JSON (нужно ДО роута webhook)
+  app.use(express.json());
+  
+  // Роут для получения обновлений от Telegram
+  app.post(webhookPath, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
   });
-});
+  
+} else {
+  // ===== DEVELOPMENT: Polling режим =====
+  console.log('🤖 Starting bot in POLLING mode...');
+  
+  bot = new TelegramBot(process.env.BOT_TOKEN, {
+    polling: {
+      interval: 1000,
+      autoStart: true,
+      params: {
+        timeout: 10
+      }
+    }
+  });
+  
+  // Логируем ошибки polling
+  bot.on('polling_error', (error) => {
+    if (error.code === 'ETELEGRAM' && error.message.includes('409')) {
+      console.log('⚠️ Conflict detected - another bot instance is running');
+    } else {
+      console.error('❌ Polling error:', error.code, error.message);
+    }
+  });
+}
 
-// Логируем ошибки бота
-bot.on('polling_error', (error) => {
-  console.error('❌ Polling error:', error.code, error.message);
-});
+// Проверка что бот подключился
+bot.getMe()
+  .then((botInfo) => {
+    console.log('✅ Bot connected successfully!');
+    console.log(`   Bot username: @${botInfo.username}`);
+    console.log(`   Bot name: ${botInfo.first_name}`);
+  })
+  .catch((error) => {
+    console.error('❌ Bot connection failed:', error.message);
+  });
 
-bot.on('error', (error) => {
-  console.error('❌ Bot error:', error.message);
+// Логируем все входящие сообщения (для отладки)
+bot.on('message', (msg) => {
+  console.log('📨 Message:', {
+    from: msg.from.username || msg.from.first_name,
+    text: msg.text,
+    chatId: msg.chat.id
+  });
 });
 
 // ==================== MIDDLEWARE ====================
 
 app.use(cors());
-app.use(express.json());
 
-// Логирование запросов
+// JSON parsing (если ещё не добавлен для webhook)
+if (!isProduction) {
+  app.use(express.json());
+}
+
+// Логирование запросов (исключаем webhook путь)
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
+  if (!req.path.includes('/bot')) {
+    console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
+  }
   next();
 });
 
@@ -100,7 +131,7 @@ app.use((req, res, next) => {
 
 // Команда /start
 bot.onText(/\/start/, async (msg) => {
-  console.log('🚀 /start command received!');
+  console.log('🚀 /start command received from:', msg.from.username || msg.from.first_name);
   
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -108,10 +139,8 @@ bot.onText(/\/start/, async (msg) => {
   const firstName = msg.from.first_name;
   const lastName = msg.from.last_name;
 
-  console.log('   User info:', { chatId, userId, username, firstName });
-
   try {
-    // Создаём или обновляем пользователя
+    // Создаём или обновляем пользователя в БД
     await prisma.user.upsert({
       where: { id: BigInt(userId) },
       update: {
@@ -129,9 +158,10 @@ bot.onText(/\/start/, async (msg) => {
     });
     console.log('   ✅ User saved to database');
 
-    // Отправляем приветствие с кнопкой Web App
-    const webAppUrl = process.env.WEBAPP_URL || 'https://google.com';
+    // URL для Web App
+    const webAppUrl = process.env.WEBAPP_URL || WEBHOOK_URL || 'https://google.com';
     
+    // Отправляем приветствие с кнопками
     await bot.sendMessage(chatId, 
       `👋 Привет, ${firstName}!\n\n` +
       `🌿 Добро пожаловать в нашу кальянную!\n\n` +
@@ -163,32 +193,38 @@ bot.onText(/\/start/, async (msg) => {
     console.log('   ✅ Welcome message sent!');
     
   } catch (error) {
-    console.error('❌ Error in /start:', error);
+    console.error('❌ Error in /start:', error.message);
     await bot.sendMessage(chatId, '❌ Произошла ошибка. Попробуй позже.');
   }
 });
 
-// Команда /menu - быстрый доступ к меню
+// Команда /menu
 bot.onText(/\/menu/, async (msg) => {
-  console.log('📖 /menu command received!');
+  console.log('📖 /menu command received');
   const chatId = msg.chat.id;
-  const webAppUrl = process.env.WEBAPP_URL || 'https://google.com';
+  const webAppUrl = process.env.WEBAPP_URL || WEBHOOK_URL || 'https://google.com';
   
   await bot.sendMessage(chatId,
-    '🌿 Открой наше меню:',
+    '🌿 Выбери раздел:',
     {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: '📖 Меню вкусов',
+              text: '📖 Все вкусы',
               web_app: { url: `${webAppUrl}/flavors` }
             }
           ],
           [
             {
-              text: '🎨 Миксы',
+              text: '🎨 Готовые миксы',
               web_app: { url: `${webAppUrl}/mixes` }
+            }
+          ],
+          [
+            {
+              text: '✨ Создать свой микс',
+              web_app: { url: `${webAppUrl}/create-mix` }
             }
           ]
         ]
@@ -199,38 +235,73 @@ bot.onText(/\/menu/, async (msg) => {
 
 // Команда /help
 bot.onText(/\/help/, async (msg) => {
-  console.log('📚 /help command received!');
+  console.log('📚 /help command received');
   const chatId = msg.chat.id;
   
   await bot.sendMessage(chatId,
     `📚 *Помощь*\n\n` +
-    `Доступные команды:\n` +
+    `*Доступные команды:*\n` +
     `/start - Запустить бота\n` +
     `/menu - Открыть меню\n` +
     `/help - Показать эту справку\n\n` +
+    `*Как пользоваться:*\n` +
+    `1. Нажми "Открыть меню"\n` +
+    `2. Выбери вкусы или готовый микс\n` +
+    `3. Сделай заказ на столик\n\n` +
     `По любым вопросам обращайся к администратору! 🙌`,
     { parse_mode: 'Markdown' }
   );
 });
 
-// Команда /test - для проверки работы бота
+// Команда /test - для проверки
 bot.onText(/\/test/, async (msg) => {
-  console.log('🧪 /test command received!');
-  await bot.sendMessage(msg.chat.id, '✅ Бот работает отлично!');
+  console.log('🧪 /test command received');
+  const mode = isProduction ? 'Webhook (Production)' : 'Polling (Development)';
+  await bot.sendMessage(msg.chat.id, 
+    `✅ Бот работает!\n\n` +
+    `📡 Режим: ${mode}\n` +
+    `⏰ Время сервера: ${new Date().toISOString()}`
+  );
+});
+
+// Команда /stats - статистика (для админа)
+bot.onText(/\/stats/, async (msg) => {
+  console.log('📊 /stats command received');
+  const chatId = msg.chat.id;
+  
+  try {
+    const usersCount = await prisma.user.count();
+    const brandsCount = await prisma.brand.count({ where: { isActive: true } });
+    const flavorsCount = await prisma.flavor.count({ where: { isDeleted: false } });
+    const mixesCount = await prisma.mix.count({ where: { isDeleted: false } });
+    
+    await bot.sendMessage(chatId,
+      `📊 *Статистика*\n\n` +
+      `👥 Пользователей: ${usersCount}\n` +
+      `🏷️ Брендов: ${brandsCount}\n` +
+      `🌿 Вкусов: ${flavorsCount}\n` +
+      `🎨 Миксов: ${mixesCount}`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (error) {
+    console.error('Error getting stats:', error);
+    await bot.sendMessage(chatId, '❌ Ошибка получения статистики');
+  }
 });
 
 // Обработка callback кнопок
 bot.on('callback_query', async (query) => {
   console.log('🔘 Callback received:', query.data);
   
+  await bot.answerCallbackQuery(query.id);
+  
   if (query.data === 'help') {
-    await bot.answerCallbackQuery(query.id);
     await bot.sendMessage(query.message.chat.id, 
       `📚 *Помощь*\n\n` +
-      `Доступные команды:\n` +
+      `Используй команды:\n` +
       `/start - Запустить бота\n` +
       `/menu - Открыть меню\n` +
-      `/help - Показать эту справку`,
+      `/help - Справка`,
       { parse_mode: 'Markdown' }
     );
   }
@@ -243,12 +314,17 @@ app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: '🌿 Hookah App API is running!',
-    version: '1.0.0'
+    version: '1.0.0',
+    mode: isProduction ? 'production' : 'development'
   });
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // --- Users ---
@@ -263,7 +339,6 @@ app.get('/api/users/:telegramId', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Конвертируем BigInt в string для JSON
     res.json({
       ...user,
       id: user.id.toString(),
@@ -422,7 +497,6 @@ app.get('/api/mixes', async (req, res) => {
       orderBy,
     });
     
-    // Конвертируем BigInt
     const result = mixes.map(mix => ({
       ...mix,
       authorId: mix.authorId.toString(),
@@ -481,18 +555,15 @@ app.post('/api/mixes', async (req, res) => {
   try {
     const { name, description, authorId, strength, ingredients } = req.body;
     
-    // Валидация
     if (!name || !authorId || !ingredients || ingredients.length === 0) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Проверяем, что сумма процентов = 100
     const totalPercentage = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
     if (totalPercentage !== 100) {
       return res.status(400).json({ error: 'Ingredients percentage must sum to 100' });
     }
     
-    // Генерируем slug
     const slug = `${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
     
     const mix = await prisma.mix.create({
@@ -540,7 +611,6 @@ app.post('/api/mixes/:id/action', async (req, res) => {
     
     const mixId = parseInt(id);
     
-    // Для ORDER можно создавать несколько записей
     if (type === 'ORDER') {
       const action = await prisma.mixAction.create({
         data: {
@@ -552,19 +622,18 @@ app.post('/api/mixes/:id/action', async (req, res) => {
         },
       });
       
-      // Увеличиваем счётчик заказов
       await prisma.mix.update({
         where: { id: mixId },
         data: { ordersCount: { increment: 1 } },
       });
       
-      // Отправляем уведомление в Telegram (опционально)
+      // Уведомление о заказе
       const mix = await prisma.mix.findUnique({
         where: { id: mixId },
         include: { ingredients: { include: { flavor: true } } },
       });
       
-      console.log(`📦 New order: Mix "${mix.name}" for table ${tableNumber}`);
+      console.log(`📦 NEW ORDER: Mix "${mix?.name}" for table ${tableNumber}`);
       
       return res.status(201).json({
         ...action,
@@ -572,7 +641,7 @@ app.post('/api/mixes/:id/action', async (req, res) => {
       });
     }
     
-    // Для LIKE/DISLIKE - upsert (один раз на пользователя)
+    // LIKE/DISLIKE
     const action = await prisma.mixAction.upsert({
       where: {
         userId_mixId_type: {
@@ -589,7 +658,6 @@ app.post('/api/mixes/:id/action', async (req, res) => {
       },
     });
     
-    // Обновляем счётчики
     if (type === 'LIKE') {
       await prisma.mix.update({
         where: { id: mixId },
@@ -649,7 +717,7 @@ app.get('/api/users/:telegramId/actions', async (req, res) => {
   }
 });
 
-// --- Flavor Tags (для фильтров) ---
+// --- Flavor Tags ---
 app.get('/api/tags', (req, res) => {
   const tags = [
     { value: 'SWEET', label: '🍬 Сладкий' },
@@ -693,15 +761,13 @@ app.use((err, req, res, next) => {
 
 async function main() {
   try {
-    // Проверяем подключение к БД
     await prisma.$connect();
     console.log('✅ Connected to database');
     
-    // Запускаем сервер
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📡 API available at http://localhost:${PORT}`);
-      console.log(`\n💡 Send /start or /test to your bot in Telegram!`);
+      console.log(`\n💡 Bot is ready! Send /start or /test in Telegram`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -711,13 +777,13 @@ async function main() {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down...');
+  console.log('\n🛑 Shutting down (SIGINT)...');
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n🛑 Shutting down...');
+  console.log('\n🛑 Shutting down (SIGTERM)...');
   await prisma.$disconnect();
   process.exit(0);
 });
