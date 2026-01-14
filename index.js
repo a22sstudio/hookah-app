@@ -26,9 +26,37 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
-// Telegram Bot (polling для разработки)
+// Telegram Bot с защитой от конфликтов
 console.log('🤖 Initializing Telegram bot...');
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+
+const bot = new TelegramBot(process.env.BOT_TOKEN, {
+  polling: {
+    interval: 1000,
+    autoStart: false,
+    params: {
+      timeout: 10
+    }
+  }
+});
+
+// Задержка перед стартом polling (даём время старому процессу умереть)
+setTimeout(() => {
+  console.log('🔄 Starting bot polling...');
+  bot.startPolling();
+}, 3000);
+
+// Обработка ошибок polling
+bot.on('polling_error', (error) => {
+  if (error.code === 'ETELEGRAM' && error.message.includes('409')) {
+    console.log('⚠️ Conflict detected, restarting polling in 5 seconds...');
+    bot.stopPolling();
+    setTimeout(() => {
+      bot.startPolling();
+    }, 5000);
+  } else {
+    console.error('❌ Polling error:', error.code, error.message);
+  }
+});
 
 // Проверка подключения бота
 bot.getMe().then((botInfo) => {
